@@ -1,0 +1,17 @@
+# IDE & Build
+.idea/
+.vs/
+bin/
+obj/
+*.user
+*.userosscache
+*.sln.doccache
+
+# Temporary files
+*.tmp
+*.log
+
+# Reference Materials (Local only)
+_Refs/
+_References/
+*.bak
