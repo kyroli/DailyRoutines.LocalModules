@@ -25,7 +25,7 @@ public unsafe class WondrousTailsPredictor : ModuleBase
     public override ModuleInfo Info { get; } = new()
     {
         Title       = "天书连线概率",
-        Description = "在天书界面实时精准计算并显示连线概率与重排期望。",
+        Description = "在天书界面实时计算并显示连线概率与重排期望。",
         Category    = ModuleCategory.UIOptimization,
         Author      = ["nynpsu"]
     };
@@ -36,11 +36,10 @@ public unsafe class WondrousTailsPredictor : ModuleBase
 
     private static readonly Dictionary<ushort, double[]> MathCache = [];
     
-    private SeString? DefaultText;
     private ushort PrevMask = 0xFFFF;
-    private bool RequestRedraw;
 
     private double[]? GlobalShuffleExpectation;
+    private (string Current, string Shuffle, string Line) LocStrings;
 
     protected override void Init()
     {
@@ -50,6 +49,15 @@ public unsafe class WondrousTailsPredictor : ModuleBase
         DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostUpdate, "WeeklyBingo", OnAddonEvent);
 
         GlobalShuffleExpectation ??= CalculateExactProbabilities(0, 0);
+        
+        LocStrings = DService.Instance().ClientState.ClientLanguage switch
+        {
+            ClientLanguage.Japanese => ("現在", "シャッフル", "L"),
+            ClientLanguage.English => ("Current", "Shuffle", " Line(s)"),
+            ClientLanguage.German => ("Aktuell", "Mischen", " Reihe(n)"),
+            ClientLanguage.French => ("Actuel", "Mélange", " Ligne(s)"),
+            _ => ("当前", "重排", "线")
+        };
 
         RefreshAddon();
     }
@@ -68,16 +76,13 @@ public unsafe class WondrousTailsPredictor : ModuleBase
         {
             case AddonEvent.PostSetup:
             case AddonEvent.PostRefresh:
-                DefaultText = null;
                 PrevMask = 0xFFFF;
-                RequestRedraw = true;
                 UpdateProbabilities((AddonWeeklyBingo*)args.Addon.Address);
                 break;
             case AddonEvent.PostUpdate:
                 UpdateProbabilities((AddonWeeklyBingo*)args.Addon.Address);
                 break;
             case AddonEvent.PreFinalize:
-                DefaultText = null;
                 PrevMask = 0xFFFF;
                 break;
         }
@@ -88,9 +93,7 @@ public unsafe class WondrousTailsPredictor : ModuleBase
         var ptr = DService.Instance().GameGUI.GetAddonByName("WeeklyBingo").Address;
         if (ptr != nint.Zero)
         {
-            DefaultText = null;
             PrevMask = 0xFFFF;
-            RequestRedraw = true;
             UpdateProbabilities((AddonWeeklyBingo*)ptr);
         }
     }
@@ -98,16 +101,16 @@ public unsafe class WondrousTailsPredictor : ModuleBase
     private void RestoreAddon()
     {
         var ptr = DService.Instance().GameGUI.GetAddonByName("WeeklyBingo").Address;
-        if (ptr == nint.Zero || DefaultText == null) return;
+        if (ptr == nint.Zero) return;
         
         var addon = (AddonWeeklyBingo*)ptr;
         var node = addon->StringThing.TextNode;
-        if (node != null)
+        if (node != null && node->NodeText.StringPtr.Value != null)
         {
-            node->SetText(DefaultText.Encode());
+            var currentSeString = MemoryHelper.ReadSeStringNullTerminated((nint)node->NodeText.StringPtr.Value);
+            var baseText = StripOurText(currentSeString);
+            node->SetText(baseText.Encode());
         }
-        
-        DefaultText = null;
     }
 
     private void UpdateProbabilities(AddonWeeklyBingo* addon)
@@ -125,8 +128,6 @@ public unsafe class WondrousTailsPredictor : ModuleBase
             }
         }
 
-        if (!RequestRedraw && currentMask == PrevMask) return;
-
         var textNode = addon->StringThing.TextNode;
         if (textNode == null || textNode->NodeText.StringPtr.Value == null) return;
 
@@ -135,48 +136,29 @@ public unsafe class WondrousTailsPredictor : ModuleBase
 
         if (string.IsNullOrWhiteSpace(currentText)) return;
 
-        var loc = DService.Instance().ClientState.ClientLanguage switch
-        {
-            ClientLanguage.Japanese => ("現在", "シャッフル", "L"),
-            ClientLanguage.English => ("Current", "Shuffle", " Line(s)"),
-            ClientLanguage.German => ("Aktuell", "Mischen", " Reihe(n)"),
-            ClientLanguage.French => ("Actuel", "Mélange", " Ligne(s)"),
-            _ => ("当前", "重排", "线")
-        };
+        bool hasOurText = currentText.Contains($"{LocStrings.Current}: ");
 
-        if (currentText.Contains(loc.Item3 + ":"))
-        {
-            if (currentMask == PrevMask)
-            {
-                RequestRedraw = false;
-                return;
-            }
-        }
-        else if (DefaultText == null)
-        {
-            DefaultText = currentSeString;
-        }
+        if (currentMask == PrevMask && hasOurText) return;
 
         PrevMask = currentMask;
-        RequestRedraw = false;
 
         var currentProb = CalculateExactProbabilities(currentMask, stickers);
         var sb = new SeStringBuilder();
         
-        sb.Append(StripOurText(DefaultText ?? currentSeString));
+        sb.Append(StripOurText(currentSeString));
         sb.AddText("\n");
 
-        sb.AddText($"{loc.Item1}: ");
-        AppendProbabilityLine(sb, currentProb, GlobalShuffleExpectation!, loc.Item3);
+        sb.AddText($"{LocStrings.Current}: ");
+        AppendProbabilityLine(sb, currentProb, GlobalShuffleExpectation!, LocStrings.Line);
         
-        sb.AddText($"\n{loc.Item2}: ");
+        sb.AddText($"\n{LocStrings.Shuffle}: ");
         if (stickers is > 0 and <= 7)
         {
-            AppendProbabilityLine(sb, GlobalShuffleExpectation!, null, loc.Item3);
+            AppendProbabilityLine(sb, GlobalShuffleExpectation!, null, LocStrings.Line);
         }
         else
         {
-            sb.AddText($"1{loc.Item3}: -   2{loc.Item3}: -   3{loc.Item3}: - ");
+            sb.AddText($"1{LocStrings.Line}: -   2{LocStrings.Line}: -   3{LocStrings.Line}: - ");
         }
 
         textNode->SetText(sb.Build().Encode());
@@ -185,26 +167,64 @@ public unsafe class WondrousTailsPredictor : ModuleBase
     private SeString StripOurText(SeString original)
     {
         var result = new List<Payload>();
-        var lastWasNewLine = false;
+        var marker = $"{LocStrings.Current}: ";
 
-        foreach (var p in original.Payloads)
+        for (int i = 0; i < original.Payloads.Count; i++)
         {
-            if (p is NewLinePayload)
-            {
-                if (lastWasNewLine) continue;
-                lastWasNewLine = true;
-            }
-            else
-            {
-                lastWasNewLine = false;
-            }
+            var p = original.Payloads[i];
 
+            if (p is TextPayload tp && tp.Text != null)
+            {
+                var text = tp.Text;
+                var idx = text.IndexOf(marker, StringComparison.Ordinal);
+
+                if (idx >= 0)
+                {
+                    if (idx > 0) 
+                    {
+                        var beforeText = text[..idx];
+                        if (beforeText != "\n") 
+                        {
+                            result.Add(new TextPayload(beforeText));
+                        }
+                    }
+                    else
+                    {
+                        if (result.Count > 0)
+                        {
+                            var last = result[^1];
+                            if (last is NewLinePayload)
+                            {
+                                result.RemoveAt(result.Count - 1);
+                            }
+                            else if (last is TextPayload prevTp && prevTp.Text != null && prevTp.Text.EndsWith('\n'))
+                            {
+                                var stripped = prevTp.Text[..^1];
+                                if (string.IsNullOrEmpty(stripped)) result.RemoveAt(result.Count - 1);
+                                else result[^1] = new TextPayload(stripped);
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
             result.Add(p);
         }
 
-        while (result.Count > 0 && result[^1] is NewLinePayload)
-        {
-            result.RemoveAt(result.Count - 1);
+        while (result.Count > 0)        {
+            var last = result[^1];
+            if (last is NewLinePayload)
+            {
+                result.RemoveAt(result.Count - 1);
+            }
+            else if (last is TextPayload t && string.IsNullOrWhiteSpace(t.Text))
+            {
+                result.RemoveAt(result.Count - 1);
+            }
+            else
+            {
+                break;
+            }
         }
 
         return new SeString(result);
