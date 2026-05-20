@@ -2606,7 +2606,7 @@ public unsafe partial class AutoRetainerWorkCustom
                 ImGui.TextUnformatted($"{item.Inventory.Quantity}");
 
                 ImGui.TableNextColumn();
-                ImGui.TextUnformatted($"{(item.Inventory.Quantity * itemPrice).ToString()}");
+                ImGui.TextUnformatted($"{(item.Inventory.Quantity * itemPrice).ToChineseString()}");
             }
 
             if (isTooltip)
@@ -2659,7 +2659,7 @@ public unsafe partial class AutoRetainerWorkCustom
             using var group = ImRaii.Group();
 
             ImGui.TableNextColumn();
-            ImGui.Selectable($"{price.ToString()}");
+            ImGui.Selectable($"{price.ToChineseString()}");
 
             if (ImGui.IsItemHovered())
                 ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
@@ -2737,7 +2737,7 @@ public unsafe partial class AutoRetainerWorkCustom
                     ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{LuminaWrapper.GetAddonText(6936)}:");
 
                     ImGui.SameLine();
-                    ImGui.TextUnformatted($"{(quantity * itemModifyUnitPriceManual).ToString()}");
+                    ImGui.TextUnformatted($"{(quantity * itemModifyUnitPriceManual).ToChineseString()}");
 
                     ImGui.Separator();
 
@@ -2792,7 +2792,7 @@ public unsafe partial class AutoRetainerWorkCustom
                     ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{LuminaWrapper.GetAddonText(6936)}:");
 
                     ImGui.SameLine();
-                    ImGui.TextUnformatted($"{(quantity * itemModifyUnitPriceManual).ToString()}");
+                    ImGui.TextUnformatted($"{(quantity * itemModifyUnitPriceManual).ToChineseString()}");
 
                     ImGui.Separator();
 
@@ -2848,12 +2848,12 @@ public unsafe partial class AutoRetainerWorkCustom
                     {
                         var minPrice = listingsArray.Min(x => x.UnitPrice);
                         ImGui.SameLine();
-                        ImGui.TextDisabled($" / {DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-PriceAdjust-MinPrice")}: {minPrice.ToString()} / ");
+                        ImGui.TextDisabled($" / {DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-PriceAdjust-MinPrice")}: {minPrice.ToChineseString()} / ");
                         ImGuiOm.ClickToCopyAndNotify(minPrice.ToString());
 
                         var maxPrice = listingsArray.Max(x => x.UnitPrice);
                         ImGui.SameLine();
-                        ImGui.TextDisabled($"{DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-PriceAdjust-MaxPrice")}: {maxPrice.ToString()}");
+                        ImGui.TextDisabled($"{DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-PriceAdjust-MaxPrice")}: {maxPrice.ToChineseString()}");
                         ImGuiOm.ClickToCopyAndNotify(maxPrice.ToString());
                     }
                 }
@@ -2922,14 +2922,14 @@ public unsafe partial class AutoRetainerWorkCustom
                 }
 
                 ImGui.TableNextColumn();
-                ImGui.TextUnformatted($"{listing.UnitPrice.ToString()}");
+                ImGui.TextUnformatted($"{listing.UnitPrice.ToChineseString()}");
                 ImGuiOm.ClickToCopyAndNotify(listing.UnitPrice.ToString());
 
                 ImGui.TableNextColumn();
                 ImGui.TextUnformatted($"{listing.Quantity}");
 
                 ImGui.TableNextColumn();
-                ImGui.TextUnformatted($"{(listing.UnitPrice * listing.Quantity + listing.TotalTax).ToString()}");
+                ImGui.TextUnformatted($"{(listing.UnitPrice * listing.Quantity + listing.TotalTax).ToChineseString()}");
             }
         }
 
@@ -2954,12 +2954,12 @@ public unsafe partial class AutoRetainerWorkCustom
                 {
                     var minPrice = historyListings.Value.Min(x => x.SalePrice);
                     ImGui.SameLine();
-                    ImGui.TextDisabled($" / {DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-PriceAdjust-MinPrice")}: {minPrice.ToString()} / ");
+                    ImGui.TextDisabled($" / {DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-PriceAdjust-MinPrice")}: {minPrice.ToChineseString()} / ");
                     ImGuiOm.ClickToCopyAndNotify(minPrice.ToString());
 
                     var maxPrice = historyListings.Value.Max(x => x.SalePrice);
                     ImGui.SameLine();
-                    ImGui.TextDisabled($"{DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-PriceAdjust-MaxPrice")}: {maxPrice.ToString()}");
+                    ImGui.TextDisabled($"{DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-PriceAdjust-MaxPrice")}: {maxPrice.ToChineseString()}");
                     ImGuiOm.ClickToCopyAndNotify(maxPrice.ToString());
                 }
             }
@@ -3004,7 +3004,7 @@ public unsafe partial class AutoRetainerWorkCustom
                 ImGui.TextUnformatted($"{listing.Quantity}");
 
                 ImGui.TableNextColumn();
-                ImGui.TextUnformatted($"{listing.SalePrice.ToString()}");
+                ImGui.TextUnformatted($"{listing.SalePrice.ToChineseString()}");
                 ImGuiOm.ClickToCopyAndNotify(listing.SalePrice.ToString());
 
                 ImGui.TableNextColumn();
@@ -3074,7 +3074,7 @@ public unsafe partial class AutoRetainerWorkCustom
             ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{LuminaWrapper.GetAddonText(6936)}:");
 
             ImGui.SameLine();
-            ImGui.TextUnformatted($"{(upshelfQuantityInput * upshelfUnitPriceInput).ToString()}");
+            ImGui.TextUnformatted($"{(upshelfQuantityInput * upshelfUnitPriceInput).ToChineseString()}");
 
             ImGui.Separator();
 
@@ -3715,7 +3715,7 @@ public unsafe partial class AutoRetainerWorkCustom
 
             var priceChangedValue = (long)modifiedPrice - origPrice;
 
-            var priceChangeText = priceChangedValue.ToString();
+            var priceChangeText = priceChangedValue.ToChineseString();
             if (!priceChangeText.StartsWith('-'))
                 priceChangeText = $"+{priceChangeText}";
 
@@ -3729,8 +3729,8 @@ public unsafe partial class AutoRetainerWorkCustom
                     "AutoRetainerWork-PriceAdjust-PriceAdjustSuccessfully",
                     itemPayload,
                     RetainerManager.Instance()->GetActiveRetainer()->NameString,
-                    origPrice.ToString(),
-                    modifiedPrice.ToString(),
+                    origPrice.ToChineseString(),
+                    modifiedPrice.ToChineseString(),
                     priceChangeText,
                     priceChangeRateText
                 )
@@ -3808,12 +3808,16 @@ public unsafe partial class AutoRetainerWorkCustom
         /// <returns></returns>
         private static bool IsMarketStuck()
         {
-            if (!DailyRoutines.Manager.ModuleManager.Instance().TryGetModuleByName("AutoRefreshMarketSearchResult", out var module) || module == null) return false;
-
-            var type = typeof(AutoRetainerWorkCustom);
-            var property = type.GetProperty("IsMarketStuck", BindingFlags.Public | BindingFlags.Static);
-
-            return property != null && (bool)property.GetValue(null);
+            try
+            {
+                return DService.Instance().PI
+                               .GetIpcSubscriber<bool>("DailyRoutines.Modules.AutoRefreshMarketSearchResult.IsMarketStuck")
+                               .InvokeFunc();
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         #endregion
