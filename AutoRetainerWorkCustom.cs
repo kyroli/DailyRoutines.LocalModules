@@ -23,6 +23,7 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using DailyRoutines.Internal;
+using DailyRoutines.Manager;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.ClientState.Conditions;
@@ -63,7 +64,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
     public override ModuleInfo Info { get; } = new()
     {
         Title               = "自动雇员作业(改)",
-        Description         = "基于官方同名模块修改，自动收取并重新派遣雇员。\n※ 增加了执行期间会自动开启“跳过对话”模块的功能。",
+        Description         = "基于官方同名模块修改，自动收取并重新派遣雇员。\n※ 增加了与雇员交互期间会自动开启“跳过对话”模块的功能。",
         Category            = ModuleCategory.UIOperation,
         Author              = ["AtmoOmen", "nynpsu"],
         ModulesPrerequisite = ["AutoRefreshMarketSearchResult"]
@@ -75,32 +76,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
 
     private DRAutoRetainerWork? addon;
 
-    private bool wasWorking;
-    private bool wasTalkSkipEnabledBeforeWork;
 
-    private void OnUpdate(Dalamud.Plugin.Services.IFramework framework)
-    {
-        var isWorking = IsAnyWorkerBusy();
-        if (isWorking != wasWorking)
-        {
-            if (DailyRoutines.Manager.ModuleManager.Instance().TryGetModuleByName("AutoTalkSkip", out var module) && module != null)
-            {
-                if (isWorking)
-                {
-                    wasTalkSkipEnabledBeforeWork = module.IsEnabled;
-                    if (!wasTalkSkipEnabledBeforeWork)
-                        _ = DailyRoutines.Manager.ModuleManager.Instance().LoadAsync(module, false);
-                }
-                else
-                {
-                    if (!wasTalkSkipEnabledBeforeWork)
-                        _ = DailyRoutines.Manager.ModuleManager.Instance().UnloadAsync(module, false, false);
-                }
-            }
-            
-            wasWorking = isWorking;
-        }
-    }
 
 
     private readonly RetainerWorkerBase[] workers;
@@ -119,6 +95,8 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
         ];
     }
 
+    private static bool wasTalkSkipEnabledByUs;
+
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
@@ -134,7 +112,17 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
             RememberClosePosition = true
         };
 
-        DService.Instance().Framework.Update += OnUpdate;
+        DService.Instance().Condition.ConditionChange += OnConditionChanged;
+
+        if (DService.Instance().Condition[ConditionFlag.OccupiedSummoningBell])
+        {
+            var talkSkipModule = ModuleManager.Instance().GetModuleByName("AutoTalkSkip");
+            if (talkSkipModule != null && !(ModuleManager.Instance().IsModuleEnabled("AutoTalkSkip") ?? false))
+            {
+                wasTalkSkipEnabledByUs = true;
+                ModuleManager.Instance().LoadAsync(talkSkipModule);
+            }
+        }
     }
 
     protected override void Uninit()
@@ -145,13 +133,42 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
         foreach (var worker in workers)
             worker.Uninit();
 
-        DService.Instance().Framework.Update -= OnUpdate;
+        DService.Instance().Condition.ConditionChange -= OnConditionChanged;
 
-        if (wasWorking && !wasTalkSkipEnabledBeforeWork)
+        if (wasTalkSkipEnabledByUs)
         {
-            if (DailyRoutines.Manager.ModuleManager.Instance().TryGetModuleByName("AutoTalkSkip", out var module) && module != null)
-                _ = DailyRoutines.Manager.ModuleManager.Instance().UnloadAsync(module, false, false);
-        }}
+            wasTalkSkipEnabledByUs = false;
+            var talkSkipModule = ModuleManager.Instance().GetModuleByName("AutoTalkSkip");
+            if (talkSkipModule != null)
+                ModuleManager.Instance().UnloadAsync(talkSkipModule);
+        }
+    }
+
+    private static void OnConditionChanged(ConditionFlag flag, bool value)
+    {
+        if (flag != ConditionFlag.OccupiedSummoningBell) return;
+
+        var talkSkipModule = ModuleManager.Instance().GetModuleByName("AutoTalkSkip");
+        if (talkSkipModule == null) return;
+
+        if (value)
+        {
+            var isEnabled = ModuleManager.Instance().IsModuleEnabled("AutoTalkSkip") ?? false;
+            if (!isEnabled)
+            {
+                wasTalkSkipEnabledByUs = true;
+                ModuleManager.Instance().LoadAsync(talkSkipModule);
+            }
+        }
+        else
+        {
+            if (wasTalkSkipEnabledByUs)
+            {
+                wasTalkSkipEnabledByUs = false;
+                ModuleManager.Instance().UnloadAsync(talkSkipModule);
+            }
+        }
+    }
 
     private class TownDispatchWorker
     (
@@ -960,7 +977,6 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
         public virtual void DrawConfig() { }
 
         public abstract void Uninit();
-
         protected static TreeListCategoryNode CreateOverlayCategory(string title, float width, params NodeBase[] nodes)
         {
             var contentNode = new VerticalListNode
@@ -1157,7 +1173,6 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
             SelectString->Callback(-1);
             return false;
         }
-
         return RetainerList->IsAddonAndNodesReady();
     }
 
@@ -1795,7 +1810,7 @@ public unsafe partial class AutoRetainerWorkCustom
                     if (minPrice <= 0) continue;
 
                     var cacheKey = CacheKeys.Create(itemID, isHQ);
-                    if (!cache.TryGetPrice(cacheKey, out var currentPrice) || minPrice < currentPrice)
+                    if (!cache.TryGetPrice(cacheKey, out var currentPrice) || minPrice <= currentPrice)
                         cache.SetPrice(cacheKey, minPrice);
                 }
             }
@@ -3244,6 +3259,15 @@ public unsafe partial class AutoRetainerWorkCustom
                         (
                             () =>
                             {
+                                if (taskHelper.AbortByConflictKey(ParentModule)) return true;
+                                return RetainerSellList->IsAddonAndNodesReady();
+                            },
+                            "等待出售品列表界面完全加载"
+                        );
+                        taskHelper.Enqueue
+                        (
+                            () =>
+                            {
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return;
                                 EnqueuePriceAdjustSingle();
                             },
@@ -3254,10 +3278,19 @@ public unsafe partial class AutoRetainerWorkCustom
                             () =>
                             {
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return;
-                                if (!RetainerSellList->IsAddonAndNodesReady()) return;
-                                RetainerSellList->Callback(-1);
+                                if (RetainerSellList->IsAddonAndNodesReady())
+                                    RetainerSellList->Callback(-1);
                             },
-                            "单一雇员改价完成, 退出出售品列表界面"
+                            "单一雇员改价完成, 发出退出出售品列表界面指令"
+                        );
+                        taskHelper.Enqueue
+                        (
+                            () =>
+                            {
+                                if (taskHelper.AbortByConflictKey(ParentModule)) return true;
+                                return !RetainerSellList->IsAddonAndNodesReady() && SelectString->IsAddonAndNodesReady();
+                            },
+                            "等待确认出售品列表已退出并回到交互菜单"
                         );
                         taskHelper.Enqueue
                         (
@@ -3312,20 +3345,19 @@ public unsafe partial class AutoRetainerWorkCustom
 
                     if (!isPriceCached)
                     {
-                        var isNothingSearched = InfoProxyItemSearch.Instance()->SearchItemId == 0;
-
                         taskHelper.Enqueue
                         (
                             () =>
                             {
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return;
+                                var isNothingSearched = InfoProxyItemSearch.Instance()->SearchItemId == 0;
                                 RequestMarketItemData(itemID);
+                                if (isNothingSearched)
+                                    taskHelper.DelayNext(1000, "初始无数据, 等待 1 秒", 2);
                             },
                             $"请求雇员 {retainer->NameString} {slotIndex} 号位置处 {itemName} 的市场价格数据",
                             weight: 2
                         );
-                        if (isNothingSearched)
-                            taskHelper.DelayNext(1000, "初始无数据, 等待 1 秒", 2);
                         taskHelper.Enqueue
                         (
                             () =>
@@ -3353,6 +3385,15 @@ public unsafe partial class AutoRetainerWorkCustom
                             weight: 2
                         );
                         return;
+                    }
+
+                    // 如果价格已经被缓存, 且价格不需要变化, 我们在此刻直接短路跳过它, 防止不必要的 Enqueue 占用时间
+                    var itemMarketData = GetRetainerMarketItem(slotIndex);
+                    if (itemMarketData != null)
+                    {
+                        var itemConfig = GetItemConfigByItemKey(itemMarketData.Value.Item);
+                        var modifiedPrice = forcePrice > 0 ? forcePrice : GetModifiedPrice(itemConfig, price);
+                        if (modifiedPrice == 0 || modifiedPrice == itemMarketData.Value.Price) return;
                     }
 
                     taskHelper.Enqueue(() => EnqueuePriceAdjustSingleItem(slotIndex, price, forcePrice), "由单一物品改价接管后续逻辑", weight: 2);
