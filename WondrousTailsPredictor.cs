@@ -158,7 +158,7 @@ public unsafe class WondrousTailsPredictor : ModuleBase
         }
         else
         {
-            sb.AddText($"1{LocStrings.Line}: -   2{LocStrings.Line}: -   3{LocStrings.Line}: - ");
+            sb.AddText($"1{LocStrings.Line}:-  2{LocStrings.Line}:-  3{LocStrings.Line}:-");
         }
 
         textNode->SetText(sb.Build().Encode());
@@ -234,22 +234,23 @@ public unsafe class WondrousTailsPredictor : ModuleBase
     {
         for (int i = 0; i < 3; i++)
         {
-            sb.AddText($"{i + 1}{lineText}: ");
+            sb.AddText($"{i + 1}{lineText}:");
             FormatProb(sb, probs[i], compares?[i] ?? 0);
-            if (i < 2) sb.AddText("   ");
+            if (i < 2) sb.AddText("  ");
         }
     }
 
     private void FormatProb(SeStringBuilder sb, double val, double baseline)
     {
-        var text = $"{val * 100:F2}%";
+        var percent = val * 100;
+        var text = percent >= 100 ? $"{percent:F2}%" : percent >= 10 ? $"  {percent:F2}%" : $"    {percent:F2}%";
         if (val <= 0)
         {
             sb.AddUiForeground(text, 3);
         }
         else if (Math.Abs(val - 1.0) < 0.0001)
         {
-            sb.AddUiForeground(73).AddUiGlow(2).AddText(text).AddUiGlowOff().AddUiForegroundOff();
+            sb.AddUiForeground(31).AddText(text).AddUiForegroundOff();
         }
         else if (baseline > 0 && val / baseline >= 1.5)
         {
