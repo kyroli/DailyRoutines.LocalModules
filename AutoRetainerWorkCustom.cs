@@ -3729,21 +3729,21 @@ public unsafe partial class AutoRetainerWorkCustom
         /// <summary>
         ///     获取修改后价格结果
         /// </summary>
-        private static uint GetModifiedPrice(ItemConfig config, uint marketPrice) =>
-            (uint)(config.AdjustBehavior switch
-                      {
-                          AdjustBehavior.固定值 => Math.Max
-                          (
-                              0,
-                              marketPrice - config.AdjustValues[AdjustBehavior.固定值]
-                          ),
-                          AdjustBehavior.百分比 => Math.Max
-                          (
-                              0,
-                              marketPrice * (1 - config.AdjustValues[AdjustBehavior.百分比] / 100)
-                          ),
-                          _ => marketPrice
-                      });
+        private static uint GetModifiedPrice(ItemConfig config, uint marketPrice)
+        {
+            return config.AdjustBehavior switch
+            {
+                AdjustBehavior.固定值 => (uint)Math.Max(
+                    1L,
+                    (long)marketPrice - config.AdjustValues[AdjustBehavior.固定值]
+                ),
+                AdjustBehavior.百分比 => (uint)Math.Max(
+                    1L,
+                    (long)(marketPrice * (1.0 - config.AdjustValues[AdjustBehavior.百分比] / 100.0))
+                ),
+                _ => marketPrice
+            };
+        }
 
         /// <summary>
         ///     发送改价成功通知信息
