@@ -46,14 +46,8 @@ public class AutoJumboCactpotCustom : ModuleBase
 
         Loc = DService.Instance().ClientState.ClientLanguage switch
         {
-            ClientLanguage.Japanese => new(
-                "選択モード", "完全ランダム", "固定番号", "同期購入", "番号指定", "(初回ランダム、以降自动同期)"),
             ClientLanguage.English => new(
                 "Selection Mode", "Fully Random", "Fixed Number", "Synchronized", "Input Number", "(Randomize first, then synchronize)"),
-            ClientLanguage.German => new(
-                "Auswahlmodus", "Vollständig Zufällig", "Feste Nummer", "Synchronisiert", "Nummer eingeben", "(Zuerst zufällig, dann synchronisieren)"),
-            ClientLanguage.French => new(
-                "Mode de sélection", "Aléatoire", "Numéro fixe", "Synchronisé", "Entrer le numéro", "(Aléatoire d'abord, puis synchroniser)"),
             _ => new(
                 "选号模式", "完全随机", "固定号码", "一号多买", "指定号码", "(首张随机，后续自动沿用)")
         };

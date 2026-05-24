@@ -53,10 +53,7 @@ public unsafe class WondrousTailsPredictor : ModuleBase
         
         LocStrings = DService.Instance().ClientState.ClientLanguage switch
         {
-            ClientLanguage.Japanese => ("現在", "シャッフル", "L"),
             ClientLanguage.English => ("Current", "Shuffle", " Line(s)"),
-            ClientLanguage.German => ("Aktuell", "Mischen", " Reihe(n)"),
-            ClientLanguage.French => ("Actuel", "Mélange", " Ligne(s)"),
             _ => ("当前", "重排", "线")
         };
 
