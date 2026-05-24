@@ -61,8 +61,8 @@ namespace DailyRoutines.ModulesPublic
         private Type? solverPreGameDecksType;
         private Type? solverUtilsType;
 
-        private Type? gameCardDbType;
-        private Type? gameNpcDbType;
+        private Type? gameCardDBType;
+        private Type? gameNpcDBType;
         private Type? gameNpcInfoType;
         private Type? gameCardInfoType;
 
@@ -70,11 +70,11 @@ namespace DailyRoutines.ModulesPublic
         private bool wasAnyTriadUIOpen = false;
         private long lastPrepCloseTime = 0;
         private long lastAnyTriadUIOpenTime = 0;
-        private long lastNpcCheckTime = 0;
-        private int cachedNpcId = -1;
+        private long lastNPCCheckTime = 0;
+        private int cachedNPCID = -1;
         private bool isExitingFromCompletion = false;
-        private List<(string Name, bool IsOwned, uint ItemId)> npcDropsCache = new();
-        private HashSet<uint> sessionDroppedItemIds = new();
+        private List<(string Name, bool IsOwned, uint ItemID)> npcDropsCache = new();
+        private HashSet<uint> sessionDroppedItemIDs = new();
 
         protected override void ConfigUI()
         {
@@ -143,7 +143,7 @@ namespace DailyRoutines.ModulesPublic
                 ImGui.Indent();
                 foreach (var drop in npcDropsCache)
                 {
-                    bool isOwned = drop.IsOwned || sessionDroppedItemIds.Contains(drop.ItemId);
+                    bool isOwned = drop.IsOwned || sessionDroppedItemIDs.Contains(drop.ItemID);
                     string symbol = isOwned ? "[√]" : "[  ]";
                     ImGui.Text($"{symbol} {drop.Name}");
                 }
@@ -170,10 +170,10 @@ namespace DailyRoutines.ModulesPublic
             
             wasPrepOpen = false;
             wasAnyTriadUIOpen = false;
-            cachedNpcId = -1;
-            lastNpcCheckTime = 0;
+            cachedNPCID = -1;
+            lastNPCCheckTime = 0;
             isExitingFromCompletion = false;
-            sessionDroppedItemIds.Clear();
+            sessionDroppedItemIDs.Clear();
 
             config.EnableTripleTriad = false;
             SaveConfig(config);
@@ -202,8 +202,8 @@ namespace DailyRoutines.ModulesPublic
                 solverGameType = externalSolverGame.GetType();
                 solverPreGameDecksType = externalSolverPreGameDecks.GetType();
 
-                gameCardDbType = assembly.GetType("TriadBuddyPlugin.GameCardDB");
-                gameNpcDbType = assembly.GetType("TriadBuddyPlugin.GameNpcDB");
+                gameCardDBType = assembly.GetType("TriadBuddyPlugin.GameCardDB");
+                gameNpcDBType = assembly.GetType("TriadBuddyPlugin.GameNpcDB");
                 gameNpcInfoType = assembly.GetType("TriadBuddyPlugin.GameNpcInfo");
                 gameCardInfoType = assembly.GetType("TriadBuddyPlugin.GameCardInfo");
 
@@ -240,9 +240,9 @@ namespace DailyRoutines.ModulesPublic
                     wasAnyTriadUIOpen = true;
                 }
                 
-                if (isPrepOpen && Environment.TickCount64 - lastNpcCheckTime > 500)
+                if (isPrepOpen && Environment.TickCount64 - lastNPCCheckTime > 500)
                 {
-                    lastNpcCheckTime = Environment.TickCount64;
+                    lastNPCCheckTime = Environment.TickCount64;
                     UpdateNpcDropsCacheIfChanged();
                 }
             }
@@ -251,7 +251,7 @@ namespace DailyRoutines.ModulesPublic
                 if (wasAnyTriadUIOpen && Environment.TickCount64 - lastAnyTriadUIOpenTime > 3000)
                 {
                     npcDropsCache.Clear();
-                    cachedNpcId = -1;
+                    cachedNPCID = -1;
                     ToggleOverlayConfig(false);
                     wasAnyTriadUIOpen = false;
                     
@@ -275,7 +275,7 @@ namespace DailyRoutines.ModulesPublic
                 {
                     config.EnableTripleTriad = true;
                     matchCount = 0;
-                    sessionDroppedItemIds.Clear();
+                    sessionDroppedItemIDs.Clear();
                     SaveConfig(config);
                 }
                 lastPrepCloseTime = 0;
@@ -361,44 +361,44 @@ namespace DailyRoutines.ModulesPublic
                     var agent = (AgentTripleTriad*)agentPtr;
                     if (agent->rewardItemId > 0)
                     {
-                        sessionDroppedItemIds.Add(agent->rewardItemId);
+                        sessionDroppedItemIDs.Add(agent->rewardItemId);
                     }
                 }
 
                 bool shouldStop = false;
 
-                if (config.PlayUntilAllUnownedCardsDrop && solverGameType != null && gameCardDbType != null && gameNpcDbType != null)
+                if (config.PlayUntilAllUnownedCardsDrop && solverGameType != null && gameCardDBType != null && gameNpcDBType != null)
                 {
                     try
                     {
-                        object? currentNpc = solverGameType.GetField("currentNpc")?.GetValue(externalSolverGame);
-                        if (currentNpc != null)
+                        object? currentNPC = solverGameType.GetField("currentNPC")?.GetValue(externalSolverGame);
+                        if (currentNPC != null)
                         {
-                            int npcId = (int)currentNpc.GetType().GetField("Id")!.GetValue(currentNpc)!;
-                            object npcDbInstance = gameNpcDbType.GetMethod("Get", BindingFlags.Public | BindingFlags.Static)!.Invoke(null, null)!;
-                            object mapNpcs = gameNpcDbType.GetField("mapNpcs")!.GetValue(npcDbInstance)!;
+                            int NPCID = (int)currentNPC.GetType().GetField("Id")!.GetValue(currentNPC)!;
+                            object npcDBInstance = gameNpcDBType.GetMethod("Get", BindingFlags.Public | BindingFlags.Static)!.Invoke(null, null)!;
+                            object mapNPCs = gameNpcDBType.GetField("mapNPCs")!.GetValue(npcDBInstance)!;
                             
-                            var containsKeyMethod = mapNpcs.GetType().GetMethod("ContainsKey")!;
-                            if ((bool)containsKeyMethod.Invoke(mapNpcs, new object[] { npcId })!)
+                            var containsKeyMethod = mapNPCs.GetType().GetMethod("ContainsKey")!;
+                            if ((bool)containsKeyMethod.Invoke(mapNPCs, new object[] { NPCID })!)
                             {
-                                var getItemMethod = mapNpcs.GetType().GetProperty("Item")!.GetGetMethod()!;
-                                object npcInfo = getItemMethod.Invoke(mapNpcs, new object[] { npcId })!;
+                                var getItemMethod = mapNPCs.GetType().GetProperty("Item")!.GetGetMethod()!;
+                                object npcInfo = getItemMethod.Invoke(mapNPCs, new object[] { NPCID })!;
                                 
                                 var rewardCards = (System.Collections.IEnumerable)gameNpcInfoType!.GetField("rewardCards")!.GetValue(npcInfo)!;
                                 
-                                object cardDbInstance = gameCardDbType.GetMethod("Get", BindingFlags.Public | BindingFlags.Static)!.Invoke(null, null)!;
-                                gameCardDbType.GetMethod("Refresh")!.Invoke(cardDbInstance, null);
+                                object cardDBInstance = gameCardDBType.GetMethod("Get", BindingFlags.Public | BindingFlags.Static)!.Invoke(null, null)!;
+                                gameCardDBType.GetMethod("Refresh")!.Invoke(cardDBInstance, null);
                                 
                                 bool allCardsOwned = true;
-                                foreach (int cardId in rewardCards)
+                                foreach (int cardID in rewardCards)
                                 {
-                                    object? cardInfo = gameCardDbType.GetMethod("FindById")!.Invoke(cardDbInstance, new object[] { cardId });
+                                    object? cardInfo = gameCardDBType.GetMethod("FindById")!.Invoke(cardDBInstance, new object[] { cardID });
                                     if (cardInfo != null)
                                     {
                                         bool isOwned = (bool)gameCardInfoType!.GetField("IsOwned")!.GetValue(cardInfo)!;
-                                        uint itemId = (uint)gameCardInfoType!.GetField("ItemId")!.GetValue(cardInfo)!;
+                                        uint ItemID = (uint)gameCardInfoType!.GetField("ItemID")!.GetValue(cardInfo)!;
                                         
-                                        if (sessionDroppedItemIds.Contains(itemId)) isOwned = true;
+                                        if (sessionDroppedItemIDs.Contains(ItemID)) isOwned = true;
                                         
                                         if (!isOwned)
                                         {
@@ -462,53 +462,53 @@ namespace DailyRoutines.ModulesPublic
             {
                 if (!TryInitializeReflection()) return;
             }
-            if (solverPreGameDecksType == null || gameCardDbType == null || gameNpcDbType == null || gameNpcInfoType == null || gameCardInfoType == null) return;
+            if (solverPreGameDecksType == null || gameCardDBType == null || gameNpcDBType == null || gameNpcInfoType == null || gameCardInfoType == null) return;
             try
             {
-                object? currentNpc = solverPreGameDecksType.GetField("preGameNpc")?.GetValue(externalSolverPreGameDecks);
-                if (currentNpc != null)
+                object? currentNPC = solverPreGameDecksType.GetField("preGameNPC")?.GetValue(externalSolverPreGameDecks);
+                if (currentNPC != null)
                 {
-                    var propId = currentNpc.GetType().GetProperty("Id");
-                    var fieldId = currentNpc.GetType().GetField("Id");
-                    int npcId = propId != null ? (int)propId.GetValue(currentNpc)! : (int)fieldId!.GetValue(currentNpc)!;
+                    var propId = currentNPC.GetType().GetProperty("Id");
+                    var fieldId = currentNPC.GetType().GetField("Id");
+                    int NPCID = propId != null ? (int)propId.GetValue(currentNPC)! : (int)fieldId!.GetValue(currentNPC)!;
                     
-                    if (npcId == cachedNpcId) return;
+                    if (NPCID == cachedNPCID) return;
                     
                     npcDropsCache.Clear();
-                    cachedNpcId = npcId;
+                    cachedNPCID = NPCID;
                     
-                    object npcDbInstance = gameNpcDbType.GetMethod("Get", BindingFlags.Public | BindingFlags.Static)!.Invoke(null, null)!;
-                    object mapNpcs = gameNpcDbType.GetField("mapNpcs")!.GetValue(npcDbInstance)!;
+                    object npcDBInstance = gameNpcDBType.GetMethod("Get", BindingFlags.Public | BindingFlags.Static)!.Invoke(null, null)!;
+                    object mapNPCs = gameNpcDBType.GetField("mapNPCs")!.GetValue(npcDBInstance)!;
                     
-                    var containsKeyMethod = mapNpcs.GetType().GetMethod("ContainsKey")!;
-                    if ((bool)containsKeyMethod.Invoke(mapNpcs, new object[] { npcId })!)
+                    var containsKeyMethod = mapNPCs.GetType().GetMethod("ContainsKey")!;
+                    if ((bool)containsKeyMethod.Invoke(mapNPCs, new object[] { NPCID })!)
                     {
-                        var getItemMethod = mapNpcs.GetType().GetProperty("Item")!.GetGetMethod()!;
-                        object npcInfo = getItemMethod.Invoke(mapNpcs, new object[] { npcId })!;
+                        var getItemMethod = mapNPCs.GetType().GetProperty("Item")!.GetGetMethod()!;
+                        object npcInfo = getItemMethod.Invoke(mapNPCs, new object[] { NPCID })!;
                         var rewardCards = (System.Collections.IEnumerable)gameNpcInfoType.GetField("rewardCards")!.GetValue(npcInfo)!;
                         
-                        object cardDbInstance = gameCardDbType.GetMethod("Get", BindingFlags.Public | BindingFlags.Static)!.Invoke(null, null)!;
-                        gameCardDbType.GetMethod("Refresh")!.Invoke(cardDbInstance, null);
+                        object cardDBInstance = gameCardDBType.GetMethod("Get", BindingFlags.Public | BindingFlags.Static)!.Invoke(null, null)!;
+                        gameCardDBType.GetMethod("Refresh")!.Invoke(cardDBInstance, null);
                         
-                        Type triadCardDbType = currentNpc.GetType().Assembly.GetType("FFTriadBuddy.TriadCardDB")!;
-                        object triadCardDbInstance = triadCardDbType.GetMethod("Get", BindingFlags.Public | BindingFlags.Static)!.Invoke(null, null)!;
+                        Type triadCardDBType = currentNPC.GetType().Assembly.GetType("FFTriadBuddy.TriadCardDB")!;
+                        object triadCardDbInstance = triadCardDBType.GetMethod("Get", BindingFlags.Public | BindingFlags.Static)!.Invoke(null, null)!;
                         
-                        foreach (int cardId in rewardCards)
+                        foreach (int cardID in rewardCards)
                         {
-                            object? cardInfo = gameCardDbType.GetMethod("FindById")!.Invoke(cardDbInstance, new object[] { cardId });
+                            object? cardInfo = gameCardDBType.GetMethod("FindById")!.Invoke(cardDBInstance, new object[] { cardID });
                             bool isOwned = false;
-                            uint itemId = 0;
+                            uint ItemID = 0;
                             if (cardInfo != null)
                             {
                                 isOwned = (bool)gameCardInfoType.GetField("IsOwned")!.GetValue(cardInfo)!;
-                                itemId = (uint)gameCardInfoType.GetField("ItemId")!.GetValue(cardInfo)!;
+                                ItemID = (uint)gameCardInfoType.GetField("ItemID")!.GetValue(cardInfo)!;
                             }
                             
-                            object triadCard = triadCardDbType.GetMethod("FindById")!.Invoke(triadCardDbInstance, new object[] { cardId })!;
+                            object triadCard = triadCardDBType.GetMethod("FindById")!.Invoke(triadCardDbInstance, new object[] { cardID })!;
                             object locString = triadCard.GetType().GetField("Name")!.GetValue(triadCard)!;
                             string cardName = (string)locString.GetType().GetMethod("GetLocalized")!.Invoke(locString, null)!;
                             
-                            npcDropsCache.Add((cardName, isOwned, itemId));
+                            npcDropsCache.Add((cardName, isOwned, ItemID));
                         }
                     }
                 }
@@ -606,10 +606,10 @@ namespace DailyRoutines.ModulesPublic
                         var progress = (float)solverPreGameDecksType.GetProperty("preGameProgress")!.GetValue(externalSolverPreGameDecks)!;
                         if (progress < 1.0f) return;
 
-                        var bestId = (int)solverPreGameDecksType.GetField("preGameBestId")!.GetValue(externalSolverPreGameDecks)!;
-                        if (bestId != -1)
+                        var bestID = (int)solverPreGameDecksType.GetField("preGameBestId")!.GetValue(externalSolverPreGameDecks)!;
+                        if (bestID != -1)
                         {
-                            targetDeck = bestId;
+                            targetDeck = bestID;
                         }
                     }
                     catch (Exception ex)
@@ -624,26 +624,26 @@ namespace DailyRoutines.ModulesPublic
 
         private static string GetLoc(string key)
         {
-            var isCn = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
+            var IsCN = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
             return key switch
             {
-                "StopAuto" => isCn ? "停止自动打牌" : "Stop Auto Play",
-                "Status" => isCn ? "状态：自动打牌中 (已战 " : "Status: Auto Playing (Matches played: ",
-                "StatusEnd" => isCn ? " 场)" : ")",
-                "Hint" => isCn ? "提示：请点击游戏原生的【挑战】按钮开始自动挂机。" : "Hint: Please click the in-game [Challenge] button to start auto-farming.",
-                "StopAllCol" => isCn ? "直到集齐该 NPC 所有未拥有卡牌后停止" : "Stop when all unowned cards from this NPC are collected",
-                "PlayX" => isCn ? "挑战指定次数" : "Play a specific number of times",
-                "TargetX" => isCn ? "目标挑战次数" : "Target match count",
-                "RecDeck" => isCn ? "自动选用胜率最高卡组" : "Automatically use recommended deck",
-                "ManualDeck" => isCn ? "手动指定卡组编号 (1-10)" : "Manually select deck number (1-10)",
-                "CardList" => isCn ? "卡牌掉落列表：" : "Card Drop List:",
-                "DoneCount" => isCn ? "已完成设定的游玩次数，自动停止九宫幻卡自动对战。" : "Target match count reached, auto play stopped.",
-                "DoneCol" => isCn ? "该 NPC 的所有卡牌已集齐，自动停止九宫幻卡自动对战。" : "All unowned cards from this NPC collected, auto play stopped.",
-                "ErrCheck" => isCn ? "检查全收集状态失败: " : "Failed to check collection status: ",
-                "ErrDrop" => isCn ? "获取NPC卡牌掉落失败: " : "Failed to get NPC card drops: ",
-                "ErrBlock" => isCn ? "九宫幻卡出牌受阻，外部解析器反馈状态: " : "Auto play blocked, external solver status: ",
-                "ErrInvoke" => isCn ? "自动出牌反射调用失败: " : "Failed to invoke external solver: ",
-                "ErrRec" => isCn ? "读取推荐卡组失败: " : "Failed to read recommended deck: ",
+                "StopAuto" => IsCN ? "停止自动打牌" : "Stop Auto Play",
+                "Status" => IsCN ? "状态：自动打牌中 (已战 " : "Status: Auto Playing (Matches played: ",
+                "StatusEnd" => IsCN ? " 场)" : ")",
+                "Hint" => IsCN ? "提示：请点击游戏原生的【挑战】按钮开始自动挂机。" : "Hint: Please click the in-game [Challenge] button to start auto-farming.",
+                "StopAllCol" => IsCN ? "直到集齐该 NPC 所有未拥有卡牌后停止" : "Stop when all unowned cards from this NPC are collected",
+                "PlayX" => IsCN ? "挑战指定次数" : "Play a specific number of times",
+                "TargetX" => IsCN ? "目标挑战次数" : "Target match count",
+                "RecDeck" => IsCN ? "自动选用胜率最高卡组" : "Automatically use recommended deck",
+                "ManualDeck" => IsCN ? "手动指定卡组编号 (1-10)" : "Manually select deck number (1-10)",
+                "CardList" => IsCN ? "卡牌掉落列表：" : "Card Drop List:",
+                "DoneCount" => IsCN ? "已完成设定的游玩次数，自动停止九宫幻卡自动对战。" : "Target match count reached, auto play stopped.",
+                "DoneCol" => IsCN ? "该 NPC 的所有卡牌已集齐，自动停止九宫幻卡自动对战。" : "All unowned cards from this NPC collected, auto play stopped.",
+                "ErrCheck" => IsCN ? "检查全收集状态失败: " : "Failed to check collection status: ",
+                "ErrDrop" => IsCN ? "获取NPC卡牌掉落失败: " : "Failed to get NPC card drops: ",
+                "ErrBlock" => IsCN ? "九宫幻卡出牌受阻，外部解析器反馈状态: " : "Auto play blocked, external solver status: ",
+                "ErrInvoke" => IsCN ? "自动出牌反射调用失败: " : "Failed to invoke external solver: ",
+                "ErrRec" => IsCN ? "读取推荐卡组失败: " : "Failed to read recommended deck: ",
                 _ => key
             };
         }

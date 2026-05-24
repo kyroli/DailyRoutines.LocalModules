@@ -35,7 +35,7 @@ public class GoldSaucerGATEsHelper : ModuleBase
     private const float StageSouth = -21f;
     private const float StageEast  = 85.45f;
     private const float StageWest  = 55.6f;
-    private const uint FungahDataId = 1010476;
+    private const uint FungahDataID = 1010476;
     private const float DotRadius = 6f;
 
     // --- Slice Is Right 常量 ---
@@ -115,7 +115,7 @@ public class GoldSaucerGATEsHelper : ModuleBase
                 isFungahPresent = false;
                 foreach (var obj in DService.Instance().ObjectTable)
                 {
-                    if (obj.ObjectKind == ObjectKind.EventNpc && obj.DataID == FungahDataId)
+                    if (obj.ObjectKind == ObjectKind.EventNpc && obj.DataID == FungahDataID)
                     {
                         isFungahPresent = true;
                         break;
@@ -187,7 +187,7 @@ public class GoldSaucerGATEsHelper : ModuleBase
         }
     }
 
-    private void RenderSliceObject(ulong objId, Vector3 position, float rotation, uint dataId)
+    private void RenderSliceObject(ulong objId, Vector3 position, float rotation, uint dataID)
     {
         var now = DateTime.Now;
         if (!objectSpawnTimes.TryGetValue(objId, out var spawnTime))
@@ -200,7 +200,7 @@ public class GoldSaucerGATEsHelper : ModuleBase
         var delay = 5;
         if (spawnTime.AddSeconds(delay) > now) return;
 
-        switch (dataId)
+        switch (dataID)
         {
             case 2010777: // 单刀 - 蓝色矩形
                 DrawRectWorld(position, rotation + HalfPi, 25f, 5f, ColourSliceBlue);
@@ -217,7 +217,7 @@ public class GoldSaucerGATEsHelper : ModuleBase
 
     private void DrawRectWorld(Vector3 origin, float rotation, float length, float width, uint colour)
     {
-        var gameGui  = DService.Instance().GameGUI;
+        var gameGUI  = DService.Instance().GameGUI;
         var drawList = ImGui.GetBackgroundDrawList();
 
         var halfWidth = width / 2f;
@@ -249,10 +249,10 @@ public class GoldSaucerGATEsHelper : ModuleBase
             v1.Z + length * cosRot);
 
         var anyVisible = false;
-        anyVisible |= gameGui.WorldToScreen(v1, out var sp1);
-        anyVisible |= gameGui.WorldToScreen(v2, out var sp2);
-        anyVisible |= gameGui.WorldToScreen(v3, out var sp3);
-        anyVisible |= gameGui.WorldToScreen(v4, out var sp4);
+        anyVisible |= gameGUI.WorldToScreen(v1, out var sp1);
+        anyVisible |= gameGUI.WorldToScreen(v2, out var sp2);
+        anyVisible |= gameGUI.WorldToScreen(v3, out var sp3);
+        anyVisible |= gameGUI.WorldToScreen(v4, out var sp4);
 
         if (anyVisible)
         {
@@ -266,7 +266,7 @@ public class GoldSaucerGATEsHelper : ModuleBase
 
     private void DrawFilledCircleWorld(Vector3 center, float radius, uint colour)
     {
-        var gameGui  = DService.Instance().GameGUI;
+        var gameGUI  = DService.Instance().GameGUI;
         var drawList = ImGui.GetBackgroundDrawList();
 
         var anyVisible = false;
@@ -279,7 +279,7 @@ public class GoldSaucerGATEsHelper : ModuleBase
                 center.Y,
                 center.Z + radius * CircleCoses[i]);
 
-            if (gameGui.WorldToScreen(wp, out var sp))
+            if (gameGUI.WorldToScreen(wp, out var sp))
             {
                 anyVisible = true;
             }
@@ -289,4 +289,5 @@ public class GoldSaucerGATEsHelper : ModuleBase
         if (anyVisible) drawList.PathFillConvex(colour);
         else drawList.PathClear();
     }
+
 }

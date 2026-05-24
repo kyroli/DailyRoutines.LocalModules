@@ -89,9 +89,9 @@ public class CustomAlarms : ModuleBase
     private bool anyEnabledAlarmsAndStages = false;
     private bool anyEnabledETAlarms = false;
 
-    private static readonly string[] SoundNamesCn = { "闹铃", "八音盒", "水晶序曲", "陆行鸟", "拉诺西亚", "节日" };
-    private static readonly string[] SoundNamesEn = { "Alarm", "Music Box", "Prelude", "Chocobo", "La Noscea", "Seasonal" };
-    private static string[] SoundNames => DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? SoundNamesCn : SoundNamesEn;
+    private static readonly string[] SoundNamesCN = { "闹铃", "八音盒", "水晶序曲", "陆行鸟", "拉诺西亚", "节日" };
+    private static readonly string[] SoundNamesEN = { "Alarm", "Music Box", "Prelude", "Chocobo", "La Noscea", "Seasonal" };
+    private static string[] SoundNames => DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? SoundNamesCN : SoundNamesEN;
 
     protected override void Init()
     {
@@ -509,30 +509,30 @@ public class CustomAlarms : ModuleBase
 
     private static string GetLoc(string key)
     {
-        var isCn = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
+        var IsCN = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
         return key switch
         {
-            "Test" => isCn ? "试听" : "Test",
-            "DelAlarm" => isCn ? "删除闹钟" : "Delete Alarm",
-            "Del" => isCn ? "删除" : "Delete",
-            "ET" => isCn ? "艾欧泽亚时间 (ET)" : "Eorzea Time (ET)",
-            "LT" => isCn ? "现实时间 (LT)" : "Local Time (LT)",
-            "NewAlarm" => isCn ? "新建闹钟" : "New Alarm",
-            "Unnamed" => isCn ? "未命名" : "Unnamed",
-            "NamePrefix" => isCn ? "名称:" : "Name:",
-            "ModePrefix" => isCn ? "模式:" : "Mode:",
-            "TimePrefix" => isCn ? "时间:" : "Time:",
-            "Hour" => isCn ? "时" : "H",
-            "Minute" => isCn ? "分" : "M",
-            "StageConf" => isCn ? "提醒时段配置:" : "Reminder Stage Configuration:",
-            "ChatWin" => isCn ? "聊天窗口" : "Chat Window",
-            "DRNotif" => isCn ? "DR通知" : "DR Notice",
-            "GameAlarm" => isCn ? "游戏闹钟" : "Game Alarm",
-            "Advance" => isCn ? "提前" : "Advance",
-            "Mins" => isCn ? "分钟" : "Mins",
-            "NotifType" => isCn ? "通知类型:" : "Notification Type:",
-            "AddStage" => isCn ? "添加提醒阶段" : "Add Reminder Stage",
-            "RemTimeMsg" => isCn ? "距离“{0}”的设定时间还有 {1} 分钟" : "Time remaining for '{0}': {1} min(s)",
+            "Test" => IsCN ? "试听" : "Test",
+            "DelAlarm" => IsCN ? "删除闹钟" : "Delete Alarm",
+            "Del" => IsCN ? "删除" : "Delete",
+            "ET" => IsCN ? "艾欧泽亚时间 (ET)" : "Eorzea Time (ET)",
+            "LT" => IsCN ? "现实时间 (LT)" : "Local Time (LT)",
+            "NewAlarm" => IsCN ? "新建闹钟" : "New Alarm",
+            "Unnamed" => IsCN ? "未命名" : "Unnamed",
+            "NamePrefix" => IsCN ? "名称:" : "Name:",
+            "ModePrefix" => IsCN ? "模式:" : "Mode:",
+            "TimePrefix" => IsCN ? "时间:" : "Time:",
+            "Hour" => IsCN ? "时" : "H",
+            "Minute" => IsCN ? "分" : "M",
+            "StageConf" => IsCN ? "提醒时段配置:" : "Reminder Stage Configuration:",
+            "ChatWin" => IsCN ? "聊天窗口" : "Chat Window",
+            "DRNotif" => IsCN ? "DR通知" : "DR Notice",
+            "GameAlarm" => IsCN ? "游戏闹钟" : "Game Alarm",
+            "Advance" => IsCN ? "提前" : "Advance",
+            "Mins" => IsCN ? "分钟" : "Mins",
+            "NotifType" => IsCN ? "通知类型:" : "Notification Type:",
+            "AddStage" => IsCN ? "添加提醒阶段" : "Add Reminder Stage",
+            "RemTimeMsg" => IsCN ? "距离“{0}”的设定时间还有 {1} 分钟" : "Time remaining for '{0}': {1} min(s)",
             _ => key
         };
     }

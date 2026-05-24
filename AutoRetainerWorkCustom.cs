@@ -81,7 +81,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
 
 
     private readonly RetainerWorkerBase[] workers;
-    private static bool IsCn => DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
+    private static bool IsCN => DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
 
     public AutoRetainerWorkCustom()
     {
@@ -246,7 +246,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                         if (TaskHelper.AbortByConflictKey(ParentModule)) return true;
                         return AddonSelectStringEvent.Select(tempI);
                     },
-                    IsCn ? $"点击第 {tempI} 位雇员, 拉起市场变更请求" : $"Click {tempI}th retainer, request market change"
+                    IsCN ? $"点击第 {tempI} 位雇员, 拉起市场变更请求" : $"Click {tempI}th retainer, request market change"
                 );
                 TaskHelper.Enqueue
                 (
@@ -255,7 +255,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                         if (TaskHelper.AbortByConflictKey(ParentModule)) return true;
                         return AddonSelectYesnoEvent.ClickYes();
                     },
-                    IsCn ? "确认市场变更" : "Confirm market change"
+                    IsCN ? "确认市场变更" : "Confirm market change"
                 );
             }
         }
@@ -307,7 +307,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                             if (TaskHelper.AbortByConflictKey(ParentModule)) return true;
                             return ParentModule.EnterRetainer(index);
                         },
-                        IsCn ? $"选择进入 {index} 号雇员" : $"Select {index}th retainer"
+                        IsCN ? $"选择进入 {index} 号雇员" : $"Select {index}th retainer"
                     );
                     TaskHelper.Enqueue
                     (
@@ -316,7 +316,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                             if (TaskHelper.AbortByConflictKey(ParentModule)) return true;
                             return AddonSelectStringEvent.Select(["金币管理", "金幣管理", "Entrust or withdraw gil", "ギルの受け渡し"]);
                         },
-                        IsCn ? "选择进入金币管理" : "Select Gil Management"                    );
+                        IsCN ? "选择进入金币管理" : "Select Gil Management"                    );
                     TaskHelper.Enqueue
                     (
                         () =>
@@ -336,7 +336,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                             Bank->Close(true);
                             return true;
                         },
-                        IsCn ? "取出所有的金币" : "Withdraw all Gil"                    );
+                        IsCN ? "取出所有的金币" : "Withdraw all Gil"                    );
                     TaskHelper.Enqueue
                     (
                         () =>
@@ -344,7 +344,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                             if (TaskHelper.AbortByConflictKey(ParentModule)) return true;
                             return LeaveRetainer();
                         },
-                        IsCn ? "回到雇员列表" : "Return to retainer list"
+                        IsCN ? "回到雇员列表" : "Return to retainer list"
                     );
                 }
             );
@@ -486,7 +486,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                     if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                     return AddonSelectStringEvent.Select(["金币管理", "金幣管理", "Entrust or withdraw gil", "ギルの受け渡し"]);
                 },
-                IsCn ? "选择进入金币管理" : "Select Gil Management"            );
+                IsCN ? "选择进入金币管理" : "Select Gil Management"            );
             taskHelper.Enqueue
             (
                 () =>
@@ -517,7 +517,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                     Bank->Close(true);
                     return true;
                 },
-                IsCn ? $"使用 1 号方法均分 {index} 号雇员的金币" : $"Share Gil evenly for retainer {index} using Method 1"
+                IsCN ? $"使用 1 号方法均分 {index} 号雇员的金币" : $"Share Gil evenly for retainer {index} using Method 1"
             );
             taskHelper.Enqueue
             (
@@ -548,7 +548,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                     if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                     return AddonSelectStringEvent.Select(["金币管理", "金幣管理", "Entrust or withdraw gil", "ギルの受け渡し"]);
                 },
-                IsCn ? "选择进入金币管理" : "Select Gil Management"            );
+                IsCN ? "选择进入金币管理" : "Select Gil Management"            );
             taskHelper.Enqueue
             (
                 () =>
@@ -569,7 +569,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                     Bank->Close(true);
                     return true;
                 },
-                IsCn ? $"使用 2 号方法取出 {index} 号雇员的金币" : $"Withdraw Gil for retainer {index} using Method 2"
+                IsCN ? $"使用 2 号方法取出 {index} 号雇员的金币" : $"Withdraw Gil for retainer {index} using Method 2"
             );
 
             // 回到雇员列表
@@ -639,7 +639,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                             if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                             return ParentModule.EnterRetainer(index);
                         },
-                        IsCn ? $"选择进入 {index} 号雇员" : $"Select {index}th retainer"
+                        IsCN ? $"选择进入 {index} 号雇员" : $"Select {index}th retainer"
                     );
                     taskHelper.Enqueue
                     (
@@ -648,7 +648,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                             if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                             return AddonSelectStringEvent.Select(["道具管理", "Entrust or withdraw items", "アイテムの受け渡し"]);
                         },
-                        IsCn ? "选择道具管理" : "Select Entrust items"                    );
+                        IsCN ? "选择道具管理" : "Select Entrust items"                    );
                     taskHelper.Enqueue
                     (
                         () =>
@@ -661,7 +661,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                             AgentId.Retainer.SendEvent(0, 0);
                             return true;
                         },
-                        IsCn ? "选择同类道具合并提交" : "Select merge duplicate items"                    );
+                        IsCN ? "选择同类道具合并提交" : "Select merge duplicate items"                    );
                     taskHelper.DelayNext(500, "等待同类道具合并提交开始");
                     taskHelper.Enqueue
                     (
@@ -679,7 +679,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                             if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                             return LeaveRetainer();
                         },
-                        IsCn ? "回到雇员列表" : "Return to retainer list"
+                        IsCN ? "回到雇员列表" : "Return to retainer list"
                     );
                 }
             );
@@ -714,7 +714,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
 
                             return false;
                         },
-                        IsCn ? "等待同类道具合并提交开始" : "Wait for duplicate items merge to start",
+                        IsCN ? "等待同类道具合并提交开始" : "Wait for duplicate items merge to start",
                         weight: 2
                     );
                     break;
@@ -767,7 +767,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                             if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                             return ParentModule.EnterRetainer(index);
                         },
-                        IsCn ? $"选择进入 {index} 号雇员" : $"Select {index}th retainer"
+                        IsCN ? $"选择进入 {index} 号雇员" : $"Select {index}th retainer"
                     );
                     taskHelper.Enqueue
                     (
@@ -776,7 +776,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                             if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                             return LeaveRetainer();
                         },
-                        IsCn ? "回到雇员列表" : "Return to retainer list"
+                        IsCN ? "回到雇员列表" : "Return to retainer list"
                     );
                 }
             );
@@ -878,7 +878,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
             if (count == 0)
             {
                 if (taskHelper.IsBusy)
-                    taskHelper.Enqueue(LeaveRetainer, IsCn ? "确保所有雇员均已返回" : "Ensure all retainers have returned");                return;
+                    taskHelper.Enqueue(LeaveRetainer, IsCN ? "确保所有雇员均已返回" : "Ensure all retainers have returned");                return;
             }
 
             foreach (var index in validRetainers)
@@ -890,7 +890,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                         if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                         return ParentModule.EnterRetainer(index);
                     },
-                    IsCn ? $"选择进入 {index} 号雇员" : $"Select {index}th retainer"
+                    IsCN ? $"选择进入 {index} 号雇员" : $"Select {index}th retainer"
                 );
 
                 taskHelper.Enqueue
@@ -946,7 +946,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                         if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                         return LeaveRetainer();
                     },
-                    IsCn ? "回到雇员列表" : "Return to retainer list"
+                    IsCN ? "回到雇员列表" : "Return to retainer list"
                 );
             }
 
@@ -1374,7 +1374,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
             (
                 AbortCondition.低于收购价,
                 (cfg, _, modified, _) =>
-                    LuminaGetter.TryGetRow<Item>(cfg.ItemID, out var itemRow) &&
+                    LuminaGetter.TryGetRow<Item>(cfg.itemID, out var itemRow) &&
                     modified <= itemRow.PriceMid
             ),
 
@@ -1431,11 +1431,11 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
 
         public ItemKey(uint itemID, bool isHQ)
         {
-            ItemID = itemID;
+            this.itemID = itemID;
             IsHQ   = isHQ;
         }
 
-        public uint ItemID { get; set; }
+        public uint itemID { get; set; }
         public bool IsHQ   { get; set; }
 
         public bool Equals(ItemKey? other)
@@ -1443,14 +1443,14 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
             if (other is null || GetType() != other.GetType())
                 return false;
 
-            return ItemID == other.ItemID && IsHQ == other.IsHQ;
+            return itemID == other.itemID && IsHQ == other.IsHQ;
         }
 
-        public override string ToString() => $"{ItemID}_{(IsHQ ? "HQ" : "NQ")}";
+        public override string ToString() => $"{itemID}_{(IsHQ ? "HQ" : "NQ")}";
 
         public override bool Equals(object? obj) => Equals(obj as ItemKey);
 
-        public override int GetHashCode() => HashCode.Combine(ItemID, IsHQ);
+        public override int GetHashCode() => HashCode.Combine(itemID, IsHQ);
 
         public static bool operator ==(ItemKey? lhs, ItemKey? rhs)
         {
@@ -1467,14 +1467,14 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
 
         public ItemConfig(uint itemID, bool isHQ)
         {
-            ItemID = itemID;
+            this.itemID = itemID;
             IsHQ   = isHQ;
             ItemName = itemID == 0
                            ? DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-PriceAdjust-CommonItemPreset")
-                           : LuminaGetter.GetRow<Item>(ItemID)?.Name.ToString() ?? string.Empty;
+                           : LuminaGetter.GetRow<Item>(itemID)?.Name.ToString() ?? string.Empty;
         }
 
-        public uint   ItemID   { get; set; }
+        public uint   itemID   { get; set; }
         public bool   IsHQ     { get; set; }
         public string ItemName { get; set; } = string.Empty;
 
@@ -1527,12 +1527,12 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
             if (other is null || GetType() != other.GetType())
                 return false;
 
-            return ItemID == other.ItemID && IsHQ == other.IsHQ;
+            return itemID == other.itemID && IsHQ == other.IsHQ;
         }
 
         public override bool Equals(object? obj) => Equals(obj as ItemConfig);
 
-        public override int GetHashCode() => HashCode.Combine(ItemID, IsHQ);
+        public override int GetHashCode() => HashCode.Combine(itemID, IsHQ);
 
         public static bool operator ==(ItemConfig? lhs, ItemConfig? rhs)
         {
@@ -1977,7 +1977,7 @@ public unsafe partial class AutoRetainerWorkCustom
 
                 if (itemConfig != null)
                 {
-                    var itemKey = new ItemKey(itemConfig.ItemID, itemConfig.IsHQ).ToString();
+                    var itemKey = new ItemKey(itemConfig.itemID, itemConfig.IsHQ).ToString();
                     ParentModule.config.ItemConfigs[itemKey] = itemConfig;
                 }
             }
@@ -2022,7 +2022,7 @@ public unsafe partial class AutoRetainerWorkCustom
 
                 var isOpenPopup = false;
 
-                using (var popup1 = ImRaii.ContextPopupItem($"{itemConfig.Value}_{itemConfig.Key}_{itemConfig.Value.ItemID}"))
+                using (var popup1 = ImRaii.ContextPopupItem($"{itemConfig.Value}_{itemConfig.Key}_{itemConfig.Value.itemID}"))
                 {
                     if (popup1)
                     {
@@ -2032,7 +2032,7 @@ public unsafe partial class AutoRetainerWorkCustom
                         if (ImGui.MenuItem(DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-PriceAdjust-CreateNewBaseOnExisted")))
                             isOpenPopup = true;
 
-                        if (itemConfig.Value.ItemID != 0)
+                        if (itemConfig.Value.itemID != 0)
                         {
                             if (ImGui.MenuItem(DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("Delete")))
                             {
@@ -2058,7 +2058,7 @@ public unsafe partial class AutoRetainerWorkCustom
                                 var newConfigStr = new ItemKey(itemSelectCombo.SelectedID, newConfigItemHQ).ToString();
                                 var newConfig = new ItemConfig
                                 {
-                                    ItemID            = itemSelectCombo.SelectedID,
+                                    itemID            = itemSelectCombo.SelectedID,
                                     IsHQ              = newConfigItemHQ,
                                     ItemName          = itemSelectCombo.SelectedItem.Name.ToString() ?? string.Empty,
                                     AbortLogic        = itemConfig.Value.AbortLogic,
@@ -2080,7 +2080,7 @@ public unsafe partial class AutoRetainerWorkCustom
                     }
                 }
 
-                if (itemConfig.Value is { ItemID: 0, IsHQ: true })
+                if (itemConfig.Value is { itemID: 0, IsHQ: true })
                     ImGui.Separator();
             }
         }
@@ -2106,18 +2106,18 @@ public unsafe partial class AutoRetainerWorkCustom
             if (selectedItemConfig == null) return;
 
             // 基本信息获取
-            if (!LuminaGetter.TryGetRow<Item>(selectedItemConfig.ItemID, out var item)) return;
+            if (!LuminaGetter.TryGetRow<Item>(selectedItemConfig.itemID, out var item)) return;
 
-            var itemName = selectedItemConfig.ItemID == 0
+            var itemName = selectedItemConfig.itemID == 0
                                ? DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-PriceAdjust-CommonItemPreset")
                                : item.Name.ToString() ?? string.Empty;
 
             var itemLogo = DService.Instance().Texture
-                                   .GetFromGameIcon(new(selectedItemConfig.ItemID == 0 ? 65002 : (uint)item.Icon, selectedItemConfig.IsHQ))
+                                   .GetFromGameIcon(new(selectedItemConfig.itemID == 0 ? 65002 : (uint)item.Icon, selectedItemConfig.IsHQ))
                                    .GetWrapOrDefault();
             if (itemLogo == null) return;
 
-            var itemBuyingPrice = selectedItemConfig.ItemID == 0 ? 1 : item.PriceLow;
+            var itemBuyingPrice = selectedItemConfig.itemID == 0 ? 1 : item.PriceLow;
 
             if (!child) return;
 
@@ -2197,7 +2197,7 @@ public unsafe partial class AutoRetainerWorkCustom
 
             ImGui.SameLine();
 
-            using (ImRaii.Disabled(selectedItemConfig.ItemID == 0))
+            using (ImRaii.Disabled(selectedItemConfig.itemID == 0))
             {
                 if (ImGuiOm.ButtonIcon("ObtainBuyingPrice", FontAwesomeIcon.Store, DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-PriceAdjust-ObtainBuyingPrice")))
                 {
@@ -2230,10 +2230,10 @@ public unsafe partial class AutoRetainerWorkCustom
 
             ImGui.SameLine();
 
-            using (ImRaii.Disabled(selectedItemConfig.ItemID == 0))
+            using (ImRaii.Disabled(selectedItemConfig.itemID == 0))
             {
                 if (ImGuiOm.ButtonIcon("OpenUniversalis", FontAwesomeIcon.Globe, DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-PriceAdjust-OpenUniversalis")))
-                    Util.OpenLink($"https://universalis.app/market/{selectedItemConfig.ItemID}");
+                    Util.OpenLink($"https://universalis.app/market/{selectedItemConfig.itemID}");
             }
 
             // 可接受降价值
@@ -3230,7 +3230,7 @@ public unsafe partial class AutoRetainerWorkCustom
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                                 return ParentModule.EnterRetainer(index);
                             },
-                            IsCn ? $"选择进入 {index} 号雇员" : $"Select {index}th retainer"
+                            IsCN ? $"选择进入 {index} 号雇员" : $"Select {index}th retainer"
                         );
                         taskHelper.Enqueue
                         (
@@ -3248,7 +3248,7 @@ public unsafe partial class AutoRetainerWorkCustom
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                                 return AddonSelectStringEvent.Select(SellInventoryItemsText);
                             },
-                            IsCn ? "点击进入出售玩家所持物品列表" : "Click to enter sell items list"
+                            IsCN ? "点击进入出售玩家所持物品列表" : "Click to enter sell items list"
                         );
                         taskHelper.Enqueue
                         (
@@ -3257,7 +3257,7 @@ public unsafe partial class AutoRetainerWorkCustom
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                                 return RetainerSellList->IsAddonAndNodesReady();
                             },
-                            IsCn ? "等待出售品列表界面完全加载" : "Wait for sell items list to load"
+                            IsCN ? "等待出售品列表界面完全加载" : "Wait for sell items list to load"
                         );
                         taskHelper.Enqueue
                         (
@@ -3266,7 +3266,7 @@ public unsafe partial class AutoRetainerWorkCustom
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return;
                                 EnqueuePriceAdjustSingle();
                             },
-                            IsCn ? "由单一雇员商品改价接管后续逻辑" : "Single retainer price adjustment logic takes over"
+                            IsCN ? "由单一雇员商品改价接管后续逻辑" : "Single retainer price adjustment logic takes over"
                         );
                         taskHelper.Enqueue
                         (
@@ -3276,7 +3276,7 @@ public unsafe partial class AutoRetainerWorkCustom
                                 if (RetainerSellList->IsAddonAndNodesReady())
                                     RetainerSellList->Callback(-1);
                             },
-                            IsCn ? "单一雇员改价完成, 发出退出出售品列表界面指令" : "Single retainer price adjustment complete, exiting sell items list"
+                            IsCN ? "单一雇员改价完成, 发出退出出售品列表界面指令" : "Single retainer price adjustment complete, exiting sell items list"
                         );
                         taskHelper.Enqueue
                         (
@@ -3285,7 +3285,7 @@ public unsafe partial class AutoRetainerWorkCustom
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                                 return !RetainerSellList->IsAddonAndNodesReady() && SelectString->IsAddonAndNodesReady();
                             },
-                            IsCn ? "等待确认出售品列表已退出并回到交互菜单" : "Wait to confirm exiting sell items list and return to menu"
+                            IsCN ? "等待确认出售品列表已退出并回到交互菜单" : "Wait to confirm exiting sell items list and return to menu"
                         );
                         taskHelper.Enqueue
                         (
@@ -3294,7 +3294,7 @@ public unsafe partial class AutoRetainerWorkCustom
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                                 return LeaveRetainer();
                             },
-                            IsCn ? "单一雇员改价完成, 返回至雇员列表界面" : "Single retainer price adjustment complete, return to retainer list"
+                            IsCN ? "单一雇员改价完成, 返回至雇员列表界面" : "Single retainer price adjustment complete, return to retainer list"
                         );
                     }
                 );
@@ -3350,7 +3350,7 @@ public unsafe partial class AutoRetainerWorkCustom
                                 if (isNothingSearched)
                                     taskHelper.DelayNext(1000, "初始无数据, 等待 1 秒", 2);
                             },
-                            IsCn ? $"请求雇员 {retainer->NameString} {slotIndex} 号位置处 {itemName} 的市场价格数据" : $"Requesting market price data for {itemName} at slot {slotIndex} of retainer {retainer->NameString}",
+                            IsCN ? $"请求雇员 {retainer->NameString} {slotIndex} 号位置处 {itemName} 的市场价格数据" : $"Requesting market price data for {itemName} at slot {slotIndex} of retainer {retainer->NameString}",
                             weight: 2
                         );
                         taskHelper.Enqueue
@@ -3362,7 +3362,7 @@ public unsafe partial class AutoRetainerWorkCustom
 
                                 return IsMarketItemDataReady(itemID);
                             },
-                            IsCn ? $"等待 {itemName} 市场价格数据完全到达" : $"Wait for market price data of {itemName} to fully arrive",
+                            IsCN ? $"等待 {itemName} 市场价格数据完全到达" : $"Wait for market price data of {itemName} to fully arrive",
                             weight: 2
                         );
                         taskHelper.Enqueue
@@ -3375,7 +3375,7 @@ public unsafe partial class AutoRetainerWorkCustom
                                 if (!PriceCacheManager.TryGetPriceCache(itemID, isItemHQ, out price) || price == 0)
                                 {
                                     RequestMarketItemData(itemID);
-                                    taskHelper.DelayNext(1000, IsCn ? "初次无数据, 尝试重新获取" : "Retrying market data request", 2);
+                                    taskHelper.DelayNext(1000, IsCN ? "初次无数据, 尝试重新获取" : "Retrying market data request", 2);
                                     
                                     taskHelper.Enqueue
                                     (
@@ -3385,7 +3385,7 @@ public unsafe partial class AutoRetainerWorkCustom
                                             if (IsMarketStuck()) return false;
                                             return IsMarketItemDataReady(itemID);
                                         },
-                                        IsCn ? "等待二次请求的数据完全到达" : "Wait for second request data",
+                                        IsCN ? "等待二次请求的数据完全到达" : "Wait for second request data",
                                         weight: 2
                                     );
                                     
@@ -3398,12 +3398,12 @@ public unsafe partial class AutoRetainerWorkCustom
                                             if (!PriceCacheManager.TryGetPriceCache(itemID, isItemHQ, out price) || price == 0)
                                             {
                                                 if (ParentModule.config.SendPriceAdjustProcessMessage)
-                                                    NotifyHelper.Instance().Chat(IsCn ? $"由于无法获取到 {itemName} 的有效市场价格，已跳过。" : $"Skipped price adjustment for {itemName} due to missing market data.");
+                                                    NotifyHelper.Instance().Chat(IsCN ? $"由于无法获取到 {itemName} 的有效市场价格，已跳过。" : $"Skipped price adjustment for {itemName} due to missing market data.");
                                                 return;
                                             }
                                             EnqueuePriceAdjustSingleItem(slotIndex, price, forcePrice);
                                         },
-                                        IsCn ? "执行二次改价逻辑判定" : "Execute secondary price adjustment logic",
+                                        IsCN ? "执行二次改价逻辑判定" : "Execute secondary price adjustment logic",
                                         weight: 2
                                     );
                                     return;
@@ -3411,7 +3411,7 @@ public unsafe partial class AutoRetainerWorkCustom
 
                                 EnqueuePriceAdjustSingleItem(slotIndex, price, forcePrice);
                             },
-                            IsCn ? "由单一物品改价接管后续逻辑" : "Single item price adjustment logic takes over",
+                            IsCN ? "由单一物品改价接管后续逻辑" : "Single item price adjustment logic takes over",
                             weight: 2
                         );
                         return;
@@ -3428,7 +3428,7 @@ public unsafe partial class AutoRetainerWorkCustom
 
                     taskHelper.Enqueue(() => EnqueuePriceAdjustSingleItem(slotIndex, price, forcePrice), "由单一物品改价接管后续逻辑", weight: 2);
                 },
-                IsCn ? $"检查当前市场第 {slotIndex} 栏的物品数据, 强制价格: {forcePrice}" : $"Check item data at slot {slotIndex}, forced price: {forcePrice}",
+                IsCN ? $"检查当前市场第 {slotIndex} 栏的物品数据, 强制价格: {forcePrice}" : $"Check item data at slot {slotIndex}, forced price: {forcePrice}",
                 weight: 1
             );
         }
@@ -3460,7 +3460,7 @@ public unsafe partial class AutoRetainerWorkCustom
                     out var abortBehavior
                 ))
             {
-                NotifyAbortCondition(itemMarketData.Value.Item.ItemID, itemMarketData.Value.Item.IsHQ, abortCondition);
+                NotifyAbortCondition(itemMarketData.Value.Item.itemID, itemMarketData.Value.Item.IsHQ, abortCondition);
                 EnqueueAbortBehavior(abortBehavior);
                 return;
             }
@@ -3468,7 +3468,7 @@ public unsafe partial class AutoRetainerWorkCustom
             SetRetainerMarketItemPrice(slot, modifiedPrice);
             NotifyPriceAdjustSuccessfully
             (
-                itemMarketData.Value.Item.ItemID,
+                itemMarketData.Value.Item.itemID,
                 itemMarketData.Value.Item.IsHQ,
                 itemMarketData.Value.Price,
                 modifiedPrice
@@ -3496,7 +3496,7 @@ public unsafe partial class AutoRetainerWorkCustom
                         SetRetainerMarketItemPrice(slot, (uint)itemConfig.PriceMinimum);
                         NotifyPriceAdjustSuccessfully
                         (
-                            itemMarketData.Value.Item.ItemID,
+                            itemMarketData.Value.Item.itemID,
                             itemMarketData.Value.Item.IsHQ,
                             itemMarketData.Value.Price,
                             (uint)itemConfig.PriceMinimum
@@ -3506,7 +3506,7 @@ public unsafe partial class AutoRetainerWorkCustom
                         SetRetainerMarketItemPrice(slot, (uint)itemConfig.PriceExpected);
                         NotifyPriceAdjustSuccessfully
                         (
-                            itemMarketData.Value.Item.ItemID,
+                            itemMarketData.Value.Item.itemID,
                             itemMarketData.Value.Item.IsHQ,
                             itemMarketData.Value.Price,
                             (uint)itemConfig.PriceExpected
@@ -3516,7 +3516,7 @@ public unsafe partial class AutoRetainerWorkCustom
                         SetRetainerMarketItemPrice(slot, (uint)itemConfig.PriceMaximum);
                         NotifyPriceAdjustSuccessfully
                         (
-                            itemMarketData.Value.Item.ItemID,
+                            itemMarketData.Value.Item.itemID,
                             itemMarketData.Value.Item.IsHQ,
                             itemMarketData.Value.Price,
                             (uint)itemConfig.PriceMaximum
@@ -3534,7 +3534,7 @@ public unsafe partial class AutoRetainerWorkCustom
                         (
                             () =>
                             {
-                                if (!TrySearchItemInInventory(itemMarketData.Value.Item.ItemID, itemMarketData.Value.Item.IsHQ, out var foundItems) ||
+                                if (!TrySearchItemInInventory(itemMarketData.Value.Item.itemID, itemMarketData.Value.Item.IsHQ, out var foundItems) ||
                                     foundItems is not { Count: > 0 })
                                     return false;
 
@@ -3895,18 +3895,18 @@ public unsafe partial class AutoRetainerWorkCustom
 
         private static string GetLoc(AdjustBehavior behavior)
         {
-            var isCn = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
+            var IsCN = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
             return behavior switch
             {
-                AdjustBehavior.固定值 => isCn ? "固定值" : "Fixed Value",
-                AdjustBehavior.百分比 => isCn ? "百分比" : "Percentage",
+                AdjustBehavior.固定值 => IsCN ? "固定值" : "Fixed Value",
+                AdjustBehavior.百分比 => IsCN ? "百分比" : "Percentage",
                 _ => behavior.ToString()
             };
         }
 
         private static string GetLoc(AbortCondition condition)
         {
-            var isCn = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
+            var IsCN = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
             var names = new List<string>();
             foreach (AbortCondition c in Enum.GetValues<AbortCondition>())
             {
@@ -3914,13 +3914,13 @@ public unsafe partial class AutoRetainerWorkCustom
                 {
                     names.Add(c switch
                     {
-                        AbortCondition.无 => isCn ? "无" : "None",
-                        AbortCondition.低于最小值 => isCn ? "低于最小值" : "Below Min Price",
-                        AbortCondition.低于预期值 => isCn ? "低于预期值" : "Below Expected Price",
-                        AbortCondition.低于收购价 => isCn ? "低于收购价" : "Below Cost Price",
-                        AbortCondition.大于可接受降价值 => isCn ? "大于可接受降价值" : "Exceeds Acceptable Drop",
-                        AbortCondition.高于预期值 => isCn ? "高于预期值" : "Above Expected Price",
-                        AbortCondition.高于最大值 => isCn ? "高于最大值" : "Above Max Price",
+                        AbortCondition.无 => IsCN ? "无" : "None",
+                        AbortCondition.低于最小值 => IsCN ? "低于最小值" : "Below Min Price",
+                        AbortCondition.低于预期值 => IsCN ? "低于预期值" : "Below Expected Price",
+                        AbortCondition.低于收购价 => IsCN ? "低于收购价" : "Below Cost Price",
+                        AbortCondition.大于可接受降价值 => IsCN ? "大于可接受降价值" : "Exceeds Acceptable Drop",
+                        AbortCondition.高于预期值 => IsCN ? "高于预期值" : "Above Expected Price",
+                        AbortCondition.高于最大值 => IsCN ? "高于最大值" : "Above Max Price",
                         _ => c.ToString()
                     });
                 }
@@ -3930,28 +3930,28 @@ public unsafe partial class AutoRetainerWorkCustom
 
         private static string GetLoc(AbortBehavior behavior)
         {
-            var isCn = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
+            var IsCN = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
             return behavior switch
             {
-                AbortBehavior.无 => isCn ? "无" : "None",
-                AbortBehavior.收回至雇员 => isCn ? "收回至雇员" : "Return to Retainer",
-                AbortBehavior.收回至背包 => isCn ? "收回至背包" : "Return to Inventory",
-                AbortBehavior.出售至系统商店 => isCn ? "出售至系统商店" : "Sell to NPC Vendor",
-                AbortBehavior.改价至最小值 => isCn ? "改价至最小值" : "Adjust to Min Price",
-                AbortBehavior.改价至预期值 => isCn ? "改价至预期值" : "Adjust to Expected Price",
-                AbortBehavior.改价至最高值 => isCn ? "改价至最高值" : "Adjust to Max Price",
+                AbortBehavior.无 => IsCN ? "无" : "None",
+                AbortBehavior.收回至雇员 => IsCN ? "收回至雇员" : "Return to Retainer",
+                AbortBehavior.收回至背包 => IsCN ? "收回至背包" : "Return to Inventory",
+                AbortBehavior.出售至系统商店 => IsCN ? "出售至系统商店" : "Sell to NPC Vendor",
+                AbortBehavior.改价至最小值 => IsCN ? "改价至最小值" : "Adjust to Min Price",
+                AbortBehavior.改价至预期值 => IsCN ? "改价至预期值" : "Adjust to Expected Price",
+                AbortBehavior.改价至最高值 => IsCN ? "改价至最高值" : "Adjust to Max Price",
                 _ => behavior.ToString()
             };
         }
 
         private static string GetLoc(SortOrder sortOrder)
         {
-            var isCn = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
+            var IsCN = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
             return sortOrder switch
             {
-                SortOrder.上架顺序 => isCn ? "上架顺序" : "Listing Order",
-                SortOrder.物品ID => isCn ? "物品ID" : "Item ID",
-                SortOrder.物品类型 => isCn ? "物品类型" : "Item Type",
+                SortOrder.上架顺序 => IsCN ? "上架顺序" : "Listing Order",
+                SortOrder.物品ID => IsCN ? "物品ID" : "Item ID",
+                SortOrder.物品类型 => IsCN ? "物品类型" : "Item Type",
                 _ => sortOrder.ToString()
             };
         }
