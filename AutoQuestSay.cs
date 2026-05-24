@@ -53,7 +53,8 @@ public unsafe class AutoQuestSay : ModuleBase
         Title       = "自动任务说话",
         Description = "当任务目标要求在当前频道说出指定台词时，点击目标将自动在当前频道发送台词。",
         Category    = ModuleCategory.General,
-        Author      = ["nynpsu"]
+        Author      = ["nynpsu"],
+        ReportURL   = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
     };
 
     public delegate ulong InteractWithObjectDelegate(TargetSystem* system, GameObject* obj, bool checkLOS);

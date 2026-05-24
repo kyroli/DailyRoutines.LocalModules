@@ -26,7 +26,8 @@ public class AutoJumboCactpotCustom : ModuleBase
         Title       = "自动每周仙人仙彩(改)",
         Description = "基于官方同名模块修改，自动购买并选择每周仙人仙彩号码。\n※ 增加了“一号多买”模式：首张票随机生成，后续票自动沿用该号码。",
         Category    = ModuleCategory.GoldSaucer,
-        Author      = ["AtmoOmen", "nynpsu"]
+        Author      = ["AtmoOmen", "nynpsu"],
+        ReportURL   = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
     };
 
     private record struct LocStrings(string SelectionMode, string ModeRandom, string ModeFixed, string ModeSync, string InputNumber, string SyncHint);

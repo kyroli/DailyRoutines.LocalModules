@@ -67,6 +67,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
         Description         = "基于官方同名模块修改，自动收取并重新派遣雇员。\n※ 增加了与雇员交互期间会自动开启“跳过对话”模块的功能。",
         Category            = ModuleCategory.UIOperation,
         Author              = ["AtmoOmen", "nynpsu"],
+        ReportURL           = "https://github.com/kyroli/DailyRoutines.LocalModules/issues",
         ModulesPrerequisite = ["AutoRefreshMarketSearchResult"]
     };
 

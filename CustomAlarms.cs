@@ -73,7 +73,8 @@ public class CustomAlarms : ModuleBase
         Title = "自定义闹钟",
         Description = "支持多阶段时间节点提醒的自定义闹钟。支持现实时间 (LT) 与艾欧泽亚时间 (ET)。",
         Category = ModuleCategory.Notice,
-        Author = ["npnpsu"]
+        Author = ["npnpsu"],
+        ReportURL = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
     };
 
     public override ModulePermission Permission { get; } = new() { AllDefaultEnabled = true };

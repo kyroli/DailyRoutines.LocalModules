@@ -25,7 +25,8 @@ public class GoldSaucerGATEsHelper : ModuleBase
         Title = "金碟机遇临门辅助",
         Description = "1. 喷风中的幸存者：提示被吹飞概率最小的站位。\n2. 必中一闪快刀斩魔：显示竹子的倒向范围。\n※ 功能移植自 Saucy 插件。",
         Category = ModuleCategory.GoldSaucer,
-        Author = ["Puni.sh","nynpsu"]
+        Author = ["Puni.sh","nynpsu"],
+        ReportURL = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
     };
 
     // --- Any Way the Wind Blows 常量 ---

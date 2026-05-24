@@ -39,7 +39,8 @@ namespace DailyRoutines.ModulesPublic
             Title = "九宫幻卡自动化",
             Description = "自动与 NPC 进行九宫幻卡连续对战。\n支持直到集齐未拥有卡牌后停止、完成指定次数后停止，以及自动读取胜率最高的卡组。\n※ 本模块仅作交互辅助，【必须】配合并加载外部插件 TriadBuddy 才能正常工作。",
             Category = ModuleCategory.GoldSaucer,
-            Author = ["nynpsu"]
+            Author = ["nynpsu"],
+            ReportURL = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
         };
 
         private Config config = null!;

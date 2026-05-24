@@ -27,7 +27,8 @@ public unsafe class WondrousTailsPredictor : ModuleBase
         Title       = "天书连线概率",
         Description = "在天书界面实时计算并显示连线概率与重排期望。",
         Category    = ModuleCategory.UIOptimization,
-        Author      = ["nynpsu"]
+        Author      = ["nynpsu"],
+        ReportURL   = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
     };
 
     private static readonly ushort[] WinLines = [
