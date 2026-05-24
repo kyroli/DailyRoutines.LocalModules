@@ -81,6 +81,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
 
 
     private readonly RetainerWorkerBase[] workers;
+    private static bool IsCn => DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
 
     public AutoRetainerWorkCustom()
     {
@@ -245,7 +246,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                         if (TaskHelper.AbortByConflictKey(ParentModule)) return true;
                         return AddonSelectStringEvent.Select(tempI);
                     },
-                    $"点击第 {tempI} 位雇员, 拉起市场变更请求"
+                    IsCn ? $"点击第 {tempI} 位雇员, 拉起市场变更请求" : $"Click {tempI}th retainer, request market change"
                 );
                 TaskHelper.Enqueue
                 (
@@ -254,7 +255,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                         if (TaskHelper.AbortByConflictKey(ParentModule)) return true;
                         return AddonSelectYesnoEvent.ClickYes();
                     },
-                    "确认市场变更"
+                    IsCn ? "确认市场变更" : "Confirm market change"
                 );
             }
         }
@@ -306,7 +307,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                             if (TaskHelper.AbortByConflictKey(ParentModule)) return true;
                             return ParentModule.EnterRetainer(index);
                         },
-                        $"选择进入 {index} 号雇员"
+                        IsCn ? $"选择进入 {index} 号雇员" : $"Select {index}th retainer"
                     );
                     TaskHelper.Enqueue
                     (
@@ -315,8 +316,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                             if (TaskHelper.AbortByConflictKey(ParentModule)) return true;
                             return AddonSelectStringEvent.Select(["金币管理", "金幣管理", "Entrust or withdraw gil", "ギルの受け渡し"]);
                         },
-                        "选择进入金币管理"
-                    );
+                        IsCn ? "选择进入金币管理" : "Select Gil Management"                    );
                     TaskHelper.Enqueue
                     (
                         () =>
@@ -336,8 +336,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                             Bank->Close(true);
                             return true;
                         },
-                        "取出所有的金币"
-                    );
+                        IsCn ? "取出所有的金币" : "Withdraw all Gil"                    );
                     TaskHelper.Enqueue
                     (
                         () =>
@@ -345,7 +344,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                             if (TaskHelper.AbortByConflictKey(ParentModule)) return true;
                             return LeaveRetainer();
                         },
-                        "回到雇员列表"
+                        IsCn ? "回到雇员列表" : "Return to retainer list"
                     );
                 }
             );
@@ -487,8 +486,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                     if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                     return AddonSelectStringEvent.Select(["金币管理", "金幣管理", "Entrust or withdraw gil", "ギルの受け渡し"]);
                 },
-                "选择进入金币管理"
-            );
+                IsCn ? "选择进入金币管理" : "Select Gil Management"            );
             taskHelper.Enqueue
             (
                 () =>
@@ -519,7 +517,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                     Bank->Close(true);
                     return true;
                 },
-                $"使用 1 号方法均分 {index} 号雇员的金币"
+                IsCn ? $"使用 1 号方法均分 {index} 号雇员的金币" : $"Share Gil evenly for retainer {index} using Method 1"
             );
             taskHelper.Enqueue
             (
@@ -550,8 +548,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                     if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                     return AddonSelectStringEvent.Select(["金币管理", "金幣管理", "Entrust or withdraw gil", "ギルの受け渡し"]);
                 },
-                "选择进入金币管理"
-            );
+                IsCn ? "选择进入金币管理" : "Select Gil Management"            );
             taskHelper.Enqueue
             (
                 () =>
@@ -572,7 +569,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                     Bank->Close(true);
                     return true;
                 },
-                $"使用 2 号方法取出 {index} 号雇员的金币"
+                IsCn ? $"使用 2 号方法取出 {index} 号雇员的金币" : $"Withdraw Gil for retainer {index} using Method 2"
             );
 
             // 回到雇员列表
@@ -642,7 +639,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                             if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                             return ParentModule.EnterRetainer(index);
                         },
-                        $"选择进入 {index} 号雇员"
+                        IsCn ? $"选择进入 {index} 号雇员" : $"Select {index}th retainer"
                     );
                     taskHelper.Enqueue
                     (
@@ -651,8 +648,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                             if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                             return AddonSelectStringEvent.Select(["道具管理", "Entrust or withdraw items", "アイテムの受け渡し"]);
                         },
-                        "选择道具管理"
-                    );
+                        IsCn ? "选择道具管理" : "Select Entrust items"                    );
                     taskHelper.Enqueue
                     (
                         () =>
@@ -665,8 +661,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                             AgentId.Retainer.SendEvent(0, 0);
                             return true;
                         },
-                        "选择同类道具合并提交"
-                    );
+                        IsCn ? "选择同类道具合并提交" : "Select merge duplicate items"                    );
                     taskHelper.DelayNext(500, "等待同类道具合并提交开始");
                     taskHelper.Enqueue
                     (
@@ -684,7 +679,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                             if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                             return LeaveRetainer();
                         },
-                        "回到雇员列表"
+                        IsCn ? "回到雇员列表" : "Return to retainer list"
                     );
                 }
             );
@@ -719,7 +714,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
 
                             return false;
                         },
-                        "等待同类道具合并提交完成",
+                        IsCn ? "等待同类道具合并提交开始" : "Wait for duplicate items merge to start",
                         weight: 2
                     );
                     break;
@@ -772,7 +767,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                             if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                             return ParentModule.EnterRetainer(index);
                         },
-                        $"选择进入 {index} 号雇员"
+                        IsCn ? $"选择进入 {index} 号雇员" : $"Select {index}th retainer"
                     );
                     taskHelper.Enqueue
                     (
@@ -781,7 +776,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                             if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                             return LeaveRetainer();
                         },
-                        "回到雇员列表"
+                        IsCn ? "回到雇员列表" : "Return to retainer list"
                     );
                 }
             );
@@ -883,8 +878,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
             if (count == 0)
             {
                 if (taskHelper.IsBusy)
-                    taskHelper.Enqueue(LeaveRetainer, "确保所有雇员均已返回");
-                return;
+                    taskHelper.Enqueue(LeaveRetainer, IsCn ? "确保所有雇员均已返回" : "Ensure all retainers have returned");                return;
             }
 
             foreach (var index in validRetainers)
@@ -896,7 +890,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                         if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                         return ParentModule.EnterRetainer(index);
                     },
-                    $"选择进入 {index} 号雇员"
+                    IsCn ? $"选择进入 {index} 号雇员" : $"Select {index}th retainer"
                 );
 
                 taskHelper.Enqueue
@@ -952,7 +946,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                         if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                         return LeaveRetainer();
                     },
-                    "回到雇员列表"
+                    IsCn ? "回到雇员列表" : "Return to retainer list"
                 );
             }
 
@@ -3236,7 +3230,7 @@ public unsafe partial class AutoRetainerWorkCustom
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                                 return ParentModule.EnterRetainer(index);
                             },
-                            $"选择进入 {index} 号雇员"
+                            IsCn ? $"选择进入 {index} 号雇员" : $"Select {index}th retainer"
                         );
                         taskHelper.Enqueue
                         (
@@ -3254,7 +3248,7 @@ public unsafe partial class AutoRetainerWorkCustom
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                                 return AddonSelectStringEvent.Select(SellInventoryItemsText);
                             },
-                            "点击进入出售玩家所持物品列表"
+                            IsCn ? "点击进入出售玩家所持物品列表" : "Click to enter sell items list"
                         );
                         taskHelper.Enqueue
                         (
@@ -3263,7 +3257,7 @@ public unsafe partial class AutoRetainerWorkCustom
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                                 return RetainerSellList->IsAddonAndNodesReady();
                             },
-                            "等待出售品列表界面完全加载"
+                            IsCn ? "等待出售品列表界面完全加载" : "Wait for sell items list to load"
                         );
                         taskHelper.Enqueue
                         (
@@ -3272,7 +3266,7 @@ public unsafe partial class AutoRetainerWorkCustom
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return;
                                 EnqueuePriceAdjustSingle();
                             },
-                            "由单一雇员商品改价接管后续逻辑"
+                            IsCn ? "由单一雇员商品改价接管后续逻辑" : "Single retainer price adjustment logic takes over"
                         );
                         taskHelper.Enqueue
                         (
@@ -3282,7 +3276,7 @@ public unsafe partial class AutoRetainerWorkCustom
                                 if (RetainerSellList->IsAddonAndNodesReady())
                                     RetainerSellList->Callback(-1);
                             },
-                            "单一雇员改价完成, 发出退出出售品列表界面指令"
+                            IsCn ? "单一雇员改价完成, 发出退出出售品列表界面指令" : "Single retainer price adjustment complete, exiting sell items list"
                         );
                         taskHelper.Enqueue
                         (
@@ -3291,7 +3285,7 @@ public unsafe partial class AutoRetainerWorkCustom
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                                 return !RetainerSellList->IsAddonAndNodesReady() && SelectString->IsAddonAndNodesReady();
                             },
-                            "等待确认出售品列表已退出并回到交互菜单"
+                            IsCn ? "等待确认出售品列表已退出并回到交互菜单" : "Wait to confirm exiting sell items list and return to menu"
                         );
                         taskHelper.Enqueue
                         (
@@ -3300,7 +3294,7 @@ public unsafe partial class AutoRetainerWorkCustom
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                                 return LeaveRetainer();
                             },
-                            "单一雇员改价完成, 返回至雇员列表界面"
+                            IsCn ? "单一雇员改价完成, 返回至雇员列表界面" : "Single retainer price adjustment complete, return to retainer list"
                         );
                     }
                 );
@@ -3356,7 +3350,7 @@ public unsafe partial class AutoRetainerWorkCustom
                                 if (isNothingSearched)
                                     taskHelper.DelayNext(1000, "初始无数据, 等待 1 秒", 2);
                             },
-                            $"请求雇员 {retainer->NameString} {slotIndex} 号位置处 {itemName} 的市场价格数据",
+                            IsCn ? $"请求雇员 {retainer->NameString} {slotIndex} 号位置处 {itemName} 的市场价格数据" : $"Requesting market price data for {itemName} at slot {slotIndex} of retainer {retainer->NameString}",
                             weight: 2
                         );
                         taskHelper.Enqueue
@@ -3368,7 +3362,7 @@ public unsafe partial class AutoRetainerWorkCustom
 
                                 return IsMarketItemDataReady(itemID);
                             },
-                            $"等待 {itemName} 市场价格数据完全到达",
+                            IsCn ? $"等待 {itemName} 市场价格数据完全到达" : $"Wait for market price data of {itemName} to fully arrive",
                             weight: 2
                         );
                         taskHelper.Enqueue
@@ -3376,13 +3370,48 @@ public unsafe partial class AutoRetainerWorkCustom
                             () =>
                             {
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return;
-                                // 什么价格数据都没有, 设置为 0
-                                if (!PriceCacheManager.TryGetPriceCache(itemID, isItemHQ, out price))
-                                    price = 0;
+                                
+                                // 初次获取不到价格数据，进行二次尝试
+                                if (!PriceCacheManager.TryGetPriceCache(itemID, isItemHQ, out price) || price == 0)
+                                {
+                                    RequestMarketItemData(itemID);
+                                    taskHelper.DelayNext(1000, IsCn ? "初次无数据, 尝试重新获取" : "Retrying market data request", 2);
+                                    
+                                    taskHelper.Enqueue
+                                    (
+                                        () =>
+                                        {
+                                            if (taskHelper.AbortByConflictKey(ParentModule)) return true;
+                                            if (IsMarketStuck()) return false;
+                                            return IsMarketItemDataReady(itemID);
+                                        },
+                                        IsCn ? "等待二次请求的数据完全到达" : "Wait for second request data",
+                                        weight: 2
+                                    );
+                                    
+                                    taskHelper.Enqueue
+                                    (
+                                        () =>
+                                        {
+                                            if (taskHelper.AbortByConflictKey(ParentModule)) return;
+                                            // 二次获取依然失败，直接放弃
+                                            if (!PriceCacheManager.TryGetPriceCache(itemID, isItemHQ, out price) || price == 0)
+                                            {
+                                                if (ParentModule.config.SendPriceAdjustProcessMessage)
+                                                    NotifyHelper.Instance().Chat(IsCn ? $"由于无法获取到 {itemName} 的有效市场价格，已跳过。" : $"Skipped price adjustment for {itemName} due to missing market data.");
+                                                return;
+                                            }
+                                            EnqueuePriceAdjustSingleItem(slotIndex, price, forcePrice);
+                                        },
+                                        IsCn ? "执行二次改价逻辑判定" : "Execute secondary price adjustment logic",
+                                        weight: 2
+                                    );
+                                    return;
+                                }
 
                                 EnqueuePriceAdjustSingleItem(slotIndex, price, forcePrice);
                             },
-                            "由单一物品改价接管后续逻辑",
+                            IsCn ? "由单一物品改价接管后续逻辑" : "Single item price adjustment logic takes over",
                             weight: 2
                         );
                         return;
@@ -3399,7 +3428,7 @@ public unsafe partial class AutoRetainerWorkCustom
 
                     taskHelper.Enqueue(() => EnqueuePriceAdjustSingleItem(slotIndex, price, forcePrice), "由单一物品改价接管后续逻辑", weight: 2);
                 },
-                $"检查当前市场第 {slotIndex} 栏的物品数据, 强制价格: {forcePrice}",
+                IsCn ? $"检查当前市场第 {slotIndex} 栏的物品数据, 强制价格: {forcePrice}" : $"Check item data at slot {slotIndex}, forced price: {forcePrice}",
                 weight: 1
             );
         }

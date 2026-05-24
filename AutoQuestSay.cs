@@ -85,12 +85,23 @@ public unsafe class AutoQuestSay : ModuleBase
     private long LastMountedTime; 
     private int LastQuestDataHash;
     
+    private record struct LocStrings(string InitializingCache, string QuestDetails, string NoActiveTasks, string LinePrefix, string SourcePrefix);
+    private LocStrings Loc;
+
     #endregion
 
     #region Module Lifecycle
 
     protected override void Init()
     {
+        Loc = DService.Instance().ClientState.ClientLanguage switch
+        {
+            Dalamud.Game.ClientLanguage.ChineseSimplified => new(
+                "正在初始化任务数据库缓存...", "任务详情", "当前没有活动中的说话任务", "台词:", "来源:"),
+            _ => new(
+                "Initializing quest database cache...", "Quest Details", "No active 'Say' tasks", "Line:", "Source:")
+        };
+
         Chat = DService.Instance().GetOmenService<ChatManager>();
 
         CurrentSayRegex = DService.Instance().ClientState.ClientLanguage switch
@@ -140,23 +151,23 @@ public unsafe class AutoQuestSay : ModuleBase
     {
         if (IsCacheInitializing)
         {
-            ImGui.TextColored(ImGuiColors.DalamudOrange, "正在初始化任务数据库缓存...");
+            ImGui.TextColored(ImGuiColors.DalamudOrange, Loc.InitializingCache);
         }
 
-        if (ImGui.CollapsingHeader("任务详情", ImGuiTreeNodeFlags.DefaultOpen))
+        if (ImGui.CollapsingHeader(Loc.QuestDetails, ImGuiTreeNodeFlags.DefaultOpen))
         {
             if (ActiveSayTasks.Count == 0)
             {
-                ImGui.TextDisabled("当前没有活动中的说话任务");
+                ImGui.TextDisabled(Loc.NoActiveTasks);
             }
             else
             {
                 foreach (var task in ActiveSayTasks)
                 {
-                    ImGui.BulletText($"台词: {task.SayMessage}");
+                    ImGui.BulletText($"{Loc.LinePrefix} {task.SayMessage}");
                     using (ImRaii.PushIndent())
                     {
-                        ImGui.TextDisabled($"来源: {task.Detail}");
+                        ImGui.TextDisabled($"{Loc.SourcePrefix} {task.Detail}");
                     }
                 }
             }
