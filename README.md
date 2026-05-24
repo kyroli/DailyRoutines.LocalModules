@@ -54,6 +54,11 @@
 <br>
 <img src="images/wt_preview.png" width="600" />
 
+#### 7. 自定义闹钟 (CustomAlarms.cs)
+支持多阶段时间节点提醒的自定义闹钟。支持现实时间 (LT) 与艾欧泽亚时间 (ET)。
+
+<img src="images/ca_icon.png" width="600" />
+
 ---
 
 ### 界面示例
