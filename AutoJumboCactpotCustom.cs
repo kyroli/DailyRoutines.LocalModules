@@ -21,10 +21,10 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoJumboCactpotCustom : ModuleBase
 {
-    public override ModuleInfo Info { get; } = new()
+    public override ModuleInfo Info => new()
     {
-        Title       = "自动每周仙人仙彩(改)",
-        Description = "基于官方同名模块修改，自动购买并选择每周仙人仙彩号码。\n※ 增加了“一号多买”模式：首张票随机生成，后续票自动沿用该号码。",
+        Title       = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "自动每周仙人仙彩(改)" : "Auto Jumbo Cactpot (Custom)",
+        Description = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "基于官方同名模块修改，自动购买并选择每周仙人仙彩号码。\n※ 增加了“一号多买”模式：首张票随机生成，后续票自动沿用该号码。" : "Automatically purchases and selects Jumbo Cactpot numbers.\n※ Added 'Synchronized' mode: first ticket is random, rest copy the first.",
         Category    = ModuleCategory.GoldSaucer,
         Author      = ["AtmoOmen", "nynpsu"],
         ReportURL   = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
@@ -46,10 +46,10 @@ public class AutoJumboCactpotCustom : ModuleBase
 
         Loc = DService.Instance().ClientState.ClientLanguage switch
         {
-            ClientLanguage.English => new(
-                "Selection Mode", "Fully Random", "Fixed Number", "Synchronized", "Input Number", "(Randomize first, then synchronize)"),
+            Dalamud.Game.ClientLanguage.ChineseSimplified => new(
+                "选号模式", "完全随机", "固定号码", "一号多买", "指定号码", "(首张随机，后续自动沿用)"),
             _ => new(
-                "选号模式", "完全随机", "固定号码", "一号多买", "指定号码", "(首张随机，后续自动沿用)")
+                "Selection Mode", "Fully Random", "Fixed Number", "Synchronized", "Input Number", "(Randomize first, then synchronize)")
         };
 
         NumberModeLoc = new Dictionary<Mode, string>

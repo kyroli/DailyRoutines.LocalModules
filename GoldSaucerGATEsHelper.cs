@@ -20,10 +20,10 @@ namespace DailyRoutines.ModulesPublic;
 
 public class GoldSaucerGATEsHelper : ModuleBase
 {
-    public override ModuleInfo Info { get; } = new()
+    public override ModuleInfo Info => new()
     {
-        Title = "金碟机遇临门辅助",
-        Description = "1. 喷风中的幸存者：提示被吹飞概率最小的站位。\n2. 必中一闪快刀斩魔：显示竹子的倒向范围。\n※ 功能移植自 Saucy 插件。",
+        Title = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "金碟机遇临门辅助" : "Gold Saucer GATEs Helper",
+        Description = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "1. 喷风中的幸存者：提示被吹飞概率最小的站位。\n2. 必中一闪快刀斩魔：显示竹子的倒向范围。\n※ 功能移植自 Saucy 插件。" : "1. Any Way the Wind Blows: Shows safest spot.\n2. The Slice Is Right: Shows bamboo fall area.\n※ Features ported from Saucy.",
         Category = ModuleCategory.GoldSaucer,
         Author = ["Puni.sh","nynpsu"],
         ReportURL = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
@@ -59,8 +59,16 @@ public class GoldSaucerGATEsHelper : ModuleBase
     private static readonly float[] CircleSins = new float[40];
     private static readonly float[] CircleCoses = new float[40];
 
+    private (string Left, string Right, string Down, string Up) Loc;
+
     protected override void Init()
     {
+        Loc = DService.Instance().ClientState.ClientLanguage switch
+        {
+            Dalamud.Game.ClientLanguage.ChineseSimplified => ("向左移动", "向右移动", "向下移动", "向上移动"),
+            _ => ("Move Left", "Move Right", "Move Down", "Move Up")
+        };
+
         for (var i = 0; i < 40; i++)
         {
             var angle = MathF.PI * 2f / 40 * i;
@@ -153,10 +161,10 @@ public class GoldSaucerGATEsHelper : ModuleBase
         if (!onSpot && isNear)
         {
             var text = "";
-            if (pos.X - SafeSpot.X > 0.015f) text = "向左移动";
-            else if (SafeSpot.X - pos.X > 0.015f) text = "向右移动";
-            else if (pos.Z < SafeSpot.Z) text = "向下移动";
-            else if (pos.Z > SafeSpot.Z) text = "向上移动";
+            if (pos.X - SafeSpot.X > 0.015f) text = Loc.Left;
+            else if (SafeSpot.X - pos.X > 0.015f) text = Loc.Right;
+            else if (pos.Z < SafeSpot.Z) text = Loc.Down;
+            else if (pos.Z > SafeSpot.Z) text = Loc.Up;
 
             if (!string.IsNullOrEmpty(text))
             {

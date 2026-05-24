@@ -36,8 +36,8 @@ namespace DailyRoutines.ModulesPublic
 
         public override ModuleInfo Info => new()
         {
-            Title = "九宫幻卡自动化",
-            Description = "自动与 NPC 进行九宫幻卡连续对战。\n支持直到集齐未拥有卡牌后停止、完成指定次数后停止，以及自动读取胜率最高的卡组。\n※ 本模块仅作交互辅助，【必须】配合并加载外部插件 TriadBuddy 才能正常工作。",
+            Title = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "九宫幻卡自动化" : "Auto Triple Triad",
+            Description = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "自动与 NPC 进行九宫幻卡连续对战。\n支持直到集齐未拥有卡牌后停止、完成指定次数后停止，以及自动读取胜率最高的卡组。\n※ 本模块仅作交互辅助，【必须】配合并加载外部插件 TriadBuddy 才能正常工作。" : "Auto play Triple Triad matches continuously.\nSupports stopping after collecting all cards, reaching target count, and auto recommended deck.\n※ This is only an interaction helper. MUST load external plugin TriadBuddy to work.",
             Category = ModuleCategory.GoldSaucer,
             Author = ["nynpsu"],
             ReportURL = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
@@ -80,30 +80,30 @@ namespace DailyRoutines.ModulesPublic
         {
             if (config.EnableTripleTriad)
             {
-                if (ImGui.Button("停止自动打牌"))
+                if (ImGui.Button(GetLoc("StopAuto")))
                 {
                     config.EnableTripleTriad = false;
                     SaveConfig(config);
                 }
                 
                 ImGui.Spacing();
-                ImGui.Text($"状态：自动打牌中 (已战 {matchCount} 场)");
+                ImGui.Text($"{GetLoc("Status")}{matchCount}{GetLoc("StatusEnd")}");
             }
             else
             {
-                ImGui.Text("提示：请点击游戏原生的【挑战】按钮开始自动挂机。");
+                ImGui.Text(GetLoc("Hint"));
             }
             
             ImGui.Spacing();
             ImGui.Separator();
             ImGui.Spacing();
-            if (ImGui.Checkbox("直到集齐该 NPC 所有未拥有卡牌后停止", ref config.PlayUntilAllUnownedCardsDrop))
+            if (ImGui.Checkbox(GetLoc("StopAllCol"), ref config.PlayUntilAllUnownedCardsDrop))
             {
                 if (config.PlayUntilAllUnownedCardsDrop) config.PlayXTimes = false;
                 SaveConfig(config);
             }
             
-            if (ImGui.Checkbox("挑战指定次数", ref config.PlayXTimes))
+            if (ImGui.Checkbox(GetLoc("PlayX"), ref config.PlayXTimes))
             {
                 if (config.PlayXTimes) config.PlayUntilAllUnownedCardsDrop = false;
                 SaveConfig(config);
@@ -113,7 +113,7 @@ namespace DailyRoutines.ModulesPublic
             {
                 ImGui.Indent();
                 ImGui.SetNextItemWidth(100f);
-                if (ImGui.InputInt("目标挑战次数", ref config.TimesToPlay))
+                if (ImGui.InputInt(GetLoc("TargetX"), ref config.TimesToPlay))
                 {
                     if (config.TimesToPlay < 1) config.TimesToPlay = 1;
                     SaveConfig(config);
@@ -121,12 +121,12 @@ namespace DailyRoutines.ModulesPublic
                 ImGui.Unindent();
             }
 
-            if (ImGui.Checkbox("自动选用胜率最高卡组", ref config.UseRecommendedDeck)) SaveConfig(config);
+            if (ImGui.Checkbox(GetLoc("RecDeck"), ref config.UseRecommendedDeck)) SaveConfig(config);
             if (!config.UseRecommendedDeck)
             {
                 ImGui.Indent();
                 ImGui.SetNextItemWidth(100f);
-                if (ImGui.InputInt("手动指定卡组编号 (1-10)", ref config.SelectedDeck))
+                if (ImGui.InputInt(GetLoc("ManualDeck"), ref config.SelectedDeck))
                 {
                     config.SelectedDeck = Math.Max(1, Math.Min(10, config.SelectedDeck));
                     SaveConfig(config);
@@ -139,7 +139,7 @@ namespace DailyRoutines.ModulesPublic
                 ImGui.Spacing();
                 ImGui.Separator();
                 ImGui.Spacing();
-                ImGui.Text("卡牌掉落列表：");
+                ImGui.Text(GetLoc("CardList"));
                 ImGui.Indent();
                 foreach (var drop in npcDropsCache)
                 {
@@ -329,7 +329,7 @@ namespace DailyRoutines.ModulesPublic
                 {
                     config.EnableTripleTriad = false;
                     SaveConfig(config);
-                    DService.Instance().Chat.Print("已完成设定的游玩次数，自动停止九宫幻卡自动对战。");
+                    DService.Instance().Chat.Print(GetLoc("DoneCount"));
                     return;
                 }
                 
@@ -410,7 +410,7 @@ namespace DailyRoutines.ModulesPublic
                                 
                                 if (allCardsOwned)
                                 {
-                                    DService.Instance().Chat.Print("该 NPC 的所有卡牌已集齐，自动停止九宫幻卡自动对战。");
+                                    DService.Instance().Chat.Print(GetLoc("DoneCol"));
                                     shouldStop = true;
                                 }
                             }
@@ -418,12 +418,12 @@ namespace DailyRoutines.ModulesPublic
                     }
                     catch (Exception ex)
                     {
-                        DService.Instance().Chat.PrintError($"检查全收集状态失败: {ex.Message}");
+                        DService.Instance().Chat.PrintError($"{GetLoc("ErrCheck")}{ex.Message}");
                     }
                 }
                 else if (config.PlayXTimes && matchCount >= config.TimesToPlay)
                 {
-                    DService.Instance().Chat.Print("已完成设定的游玩次数，自动停止九宫幻卡自动对战。");
+                    DService.Instance().Chat.Print(GetLoc("DoneCount"));
                     shouldStop = true;
                 }
 
@@ -515,7 +515,7 @@ namespace DailyRoutines.ModulesPublic
             }
             catch (Exception ex)
             {
-                DService.Instance().Chat.PrintError($"获取NPC卡牌掉落失败: {ex.Message}");
+                DService.Instance().Chat.PrintError($"{GetLoc("ErrDrop")}{ex.Message}");
             }
         }
 
@@ -545,7 +545,7 @@ namespace DailyRoutines.ModulesPublic
                     {
                         lastRequestTime = Environment.TickCount64;
                         var status = solverGameType.GetField("status")?.GetValue(externalSolverGame);
-                        DService.Instance().Chat.Print($"九宫幻卡出牌受阻，外部解析器反馈状态: {status}");
+                        DService.Instance().Chat.Print($"{GetLoc("ErrBlock")}{status}");
                     }
                     return;
                 }
@@ -572,7 +572,7 @@ namespace DailyRoutines.ModulesPublic
             }
             catch (Exception ex)
             {
-                DService.Instance().Chat.PrintError($"自动出牌反射调用失败: {ex.Message}");
+                DService.Instance().Chat.PrintError($"{GetLoc("ErrInvoke")}{ex.Message}");
                 config.EnableTripleTriad = false;
             }
         }
@@ -614,12 +614,38 @@ namespace DailyRoutines.ModulesPublic
                     }
                     catch (Exception ex)
                     {
-                        DService.Instance().Chat.PrintError($"读取推荐卡组失败: {ex.Message}");
+                        DService.Instance().Chat.PrintError($"{GetLoc("ErrRec")}{ex.Message}");
                     }
                 }
                 
                 addon->Callback((int)targetDeck);
             }
+        }
+
+        private static string GetLoc(string key)
+        {
+            var isCn = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
+            return key switch
+            {
+                "StopAuto" => isCn ? "停止自动打牌" : "Stop Auto Play",
+                "Status" => isCn ? "状态：自动打牌中 (已战 " : "Status: Auto Playing (Matches played: ",
+                "StatusEnd" => isCn ? " 场)" : ")",
+                "Hint" => isCn ? "提示：请点击游戏原生的【挑战】按钮开始自动挂机。" : "Hint: Please click the in-game [Challenge] button to start auto-farming.",
+                "StopAllCol" => isCn ? "直到集齐该 NPC 所有未拥有卡牌后停止" : "Stop when all unowned cards from this NPC are collected",
+                "PlayX" => isCn ? "挑战指定次数" : "Play a specific number of times",
+                "TargetX" => isCn ? "目标挑战次数" : "Target match count",
+                "RecDeck" => isCn ? "自动选用胜率最高卡组" : "Automatically use recommended deck",
+                "ManualDeck" => isCn ? "手动指定卡组编号 (1-10)" : "Manually select deck number (1-10)",
+                "CardList" => isCn ? "卡牌掉落列表：" : "Card Drop List:",
+                "DoneCount" => isCn ? "已完成设定的游玩次数，自动停止九宫幻卡自动对战。" : "Target match count reached, auto play stopped.",
+                "DoneCol" => isCn ? "该 NPC 的所有卡牌已集齐，自动停止九宫幻卡自动对战。" : "All unowned cards from this NPC collected, auto play stopped.",
+                "ErrCheck" => isCn ? "检查全收集状态失败: " : "Failed to check collection status: ",
+                "ErrDrop" => isCn ? "获取NPC卡牌掉落失败: " : "Failed to get NPC card drops: ",
+                "ErrBlock" => isCn ? "九宫幻卡出牌受阻，外部解析器反馈状态: " : "Auto play blocked, external solver status: ",
+                "ErrInvoke" => isCn ? "自动出牌反射调用失败: " : "Failed to invoke external solver: ",
+                "ErrRec" => isCn ? "读取推荐卡组失败: " : "Failed to read recommended deck: ",
+                _ => key
+            };
         }
     }
 }

@@ -48,10 +48,10 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoQuestSay : ModuleBase
 {
-    public override ModuleInfo Info { get; } = new()
+    public override ModuleInfo Info => new()
     {
-        Title       = "自动任务说话",
-        Description = "当任务目标要求在当前频道说出指定台词时，点击目标将自动在当前频道发送台词。",
+        Title       = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "自动任务说话" : "Auto Quest Say",
+        Description = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "当任务目标要求在当前频道说出指定台词时，点击目标将自动在当前频道发送台词。" : "Automatically sends the required chat line when clicking on quest targets that require saying specific lines.",
         Category    = ModuleCategory.General,
         Author      = ["nynpsu"],
         ReportURL   = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"

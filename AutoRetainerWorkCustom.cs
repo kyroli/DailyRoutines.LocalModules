@@ -61,10 +61,10 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class AutoRetainerWorkCustom : ModuleBase
 {
-    public override ModuleInfo Info { get; } = new()
+    public override ModuleInfo Info => new()
     {
-        Title               = "自动雇员作业(改)",
-        Description         = "基于官方同名模块修改，自动收取并重新派遣雇员。\n※ 增加了与雇员交互期间会自动开启“跳过对话”模块的功能。",
+        Title               = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "自动雇员作业(改)" : "Auto Retainer Work (Custom)",
+        Description         = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "基于官方同名模块修改，自动收取并重新派遣雇员。\n※ 增加了与雇员交互期间会自动开启“跳过对话”模块的功能。" : "Automatically collects and dispatches retainers.\n※ Added auto 'Skip Dialogue' when interacting with retainers.",
         Category            = ModuleCategory.UIOperation,
         Author              = ["AtmoOmen", "nynpsu"],
         ReportURL           = "https://github.com/kyroli/DailyRoutines.LocalModules/issues",
@@ -2145,7 +2145,7 @@ public unsafe partial class AutoRetainerWorkCustom
             {
                 foreach (AdjustBehavior behavior in Enum.GetValues<AdjustBehavior>())
                 {
-                    if (ImGui.RadioButton(behavior.ToString(), behavior == selectedItemConfig.AdjustBehavior))
+                    if (ImGui.RadioButton(GetLoc(behavior), behavior == selectedItemConfig.AdjustBehavior))
                     {
                         selectedItemConfig.AdjustBehavior = behavior;
                         ParentModule.config.Save(ParentModule);
@@ -2271,7 +2271,7 @@ public unsafe partial class AutoRetainerWorkCustom
             {
                 ImGui.SetNextItemWidth(250f * GlobalUIScale);
 
-                using (var combo = ImRaii.Combo("###AddNewLogicConditionCombo", conditionInput.ToString(), ImGuiComboFlags.HeightLarge))
+                using (var combo = ImRaii.Combo("###AddNewLogicConditionCombo", GetLoc(conditionInput), ImGuiComboFlags.HeightLarge))
                 {
                     if (combo)
                     {
@@ -2279,7 +2279,7 @@ public unsafe partial class AutoRetainerWorkCustom
                         {
                             if (condition == AbortCondition.无) continue;
 
-                            if (ImGui.Selectable(condition.ToString(), conditionInput.HasFlag(condition), ImGuiSelectableFlags.DontClosePopups))
+                            if (ImGui.Selectable(GetLoc(condition), conditionInput.HasFlag(condition), ImGuiSelectableFlags.DontClosePopups))
                             {
                                 var combinedCondition = conditionInput;
                                 if (conditionInput.HasFlag(condition))
@@ -2295,13 +2295,13 @@ public unsafe partial class AutoRetainerWorkCustom
 
                 ImGui.SetNextItemWidth(250f * GlobalUIScale);
 
-                using (var combo = ImRaii.Combo("###AddNewLogicBehaviorCombo", behaviorInput.ToString(), ImGuiComboFlags.HeightLarge))
+                using (var combo = ImRaii.Combo("###AddNewLogicBehaviorCombo", GetLoc(behaviorInput), ImGuiComboFlags.HeightLarge))
                 {
                     if (combo)
                     {
                         foreach (AbortBehavior behavior in Enum.GetValues(typeof(AbortBehavior)))
                         {
-                            if (ImGui.Selectable(behavior.ToString(), behaviorInput == behavior, ImGuiSelectableFlags.DontClosePopups))
+                            if (ImGui.Selectable(GetLoc(behavior), behaviorInput == behavior, ImGuiSelectableFlags.DontClosePopups))
                                 behaviorInput = behavior;
                         }
                     }
@@ -2331,7 +2331,7 @@ public unsafe partial class AutoRetainerWorkCustom
             foreach (var logic in selectedItemConfig.AbortLogic.ToList())
             {
                 // 条件处理 (键)
-                var origConditionStr = logic.Key.ToString();
+                var origConditionStr = GetLoc(logic.Key);
                 ImGui.SetNextItemWidth(300f * GlobalUIScale);
                 ImGui.InputText($"###Condition_{origConditionStr}", ref origConditionStr, 100, ImGuiInputTextFlags.ReadOnly);
 
@@ -2344,7 +2344,7 @@ public unsafe partial class AutoRetainerWorkCustom
                     {
                         foreach (AbortCondition condition in Enum.GetValues(typeof(AbortCondition)))
                         {
-                            if (ImGui.Selectable(condition.ToString(), logic.Key.HasFlag(condition)))
+                            if (ImGui.Selectable(GetLoc(condition), logic.Key.HasFlag(condition)))
                             {
                                 var combinedCondition = logic.Key;
                                 if (logic.Key.HasFlag(condition))
@@ -2368,7 +2368,7 @@ public unsafe partial class AutoRetainerWorkCustom
                 ImGui.TextUnformatted("→");
 
                 // 行为处理 (值)
-                var origBehaviorStr = logic.Value.ToString();
+                var origBehaviorStr = GetLoc(logic.Value);
                 ImGui.SameLine();
                 ImGui.SetNextItemWidth(300f * GlobalUIScale);
                 ImGui.InputText($"###Behavior_{origBehaviorStr}", ref origBehaviorStr, 128, ImGuiInputTextFlags.ReadOnly);
@@ -2382,7 +2382,7 @@ public unsafe partial class AutoRetainerWorkCustom
                     {
                         foreach (AbortBehavior behavior in Enum.GetValues<AbortBehavior>())
                         {
-                            if (ImGui.Selectable(behavior.ToString(), behavior == logic.Value))
+                            if (ImGui.Selectable(GetLoc(behavior), behavior == logic.Value))
                             {
                                 selectedItemConfig.AbortLogic[logic.Key] = behavior;
                                 ParentModule.config.Save(ParentModule);
@@ -2496,7 +2496,7 @@ public unsafe partial class AutoRetainerWorkCustom
                         {
                             if (ImGui.MenuItem
                                 (
-                                    $"{sortOrder}",
+                                    $"{GetLoc(sortOrder)}",
                                     string.Empty,
                                     sortOrder == ParentModule.config.MarketItemsSortOrder
                                 ))
@@ -3454,7 +3454,7 @@ public unsafe partial class AutoRetainerWorkCustom
                     var message = DailyRoutines.Manager.LanguageManager.GetSe
                     (
                         "AutoRetainerWork-PriceAdjust-ConductAbortBehavior",
-                        new SeStringBuilder().AddUiForeground(behavior.ToString(), 67).Build()
+                        new SeStringBuilder().AddUiForeground(GetLoc(behavior), 67).Build()
                     );
                     NotifyHelper.Instance().Chat(message);
                 }
@@ -3794,7 +3794,7 @@ public unsafe partial class AutoRetainerWorkCustom
                     "AutoRetainerWork-PriceAdjust-DetectAbortCondition",
                     itemPayload,
                     RetainerManager.Instance()->GetActiveRetainer()->NameString,
-                    new SeStringBuilder().AddUiForeground(condition.ToString(), 60).Build()
+                    new SeStringBuilder().AddUiForeground(GetLoc(condition), 60).Build()
                 )
             );
         }
@@ -3863,6 +3863,69 @@ public unsafe partial class AutoRetainerWorkCustom
         }
 
         #endregion
+
+        private static string GetLoc(AdjustBehavior behavior)
+        {
+            var isCn = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
+            return behavior switch
+            {
+                AdjustBehavior.固定值 => isCn ? "固定值" : "Fixed Value",
+                AdjustBehavior.百分比 => isCn ? "百分比" : "Percentage",
+                _ => behavior.ToString()
+            };
+        }
+
+        private static string GetLoc(AbortCondition condition)
+        {
+            var isCn = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
+            var names = new List<string>();
+            foreach (AbortCondition c in Enum.GetValues<AbortCondition>())
+            {
+                if (condition.HasFlag(c))
+                {
+                    names.Add(c switch
+                    {
+                        AbortCondition.无 => isCn ? "无" : "None",
+                        AbortCondition.低于最小值 => isCn ? "低于最小值" : "Below Min Price",
+                        AbortCondition.低于预期值 => isCn ? "低于预期值" : "Below Expected Price",
+                        AbortCondition.低于收购价 => isCn ? "低于收购价" : "Below Cost Price",
+                        AbortCondition.大于可接受降价值 => isCn ? "大于可接受降价值" : "Exceeds Acceptable Drop",
+                        AbortCondition.高于预期值 => isCn ? "高于预期值" : "Above Expected Price",
+                        AbortCondition.高于最大值 => isCn ? "高于最大值" : "Above Max Price",
+                        _ => c.ToString()
+                    });
+                }
+            }
+            return string.Join(", ", names);
+        }
+
+        private static string GetLoc(AbortBehavior behavior)
+        {
+            var isCn = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
+            return behavior switch
+            {
+                AbortBehavior.无 => isCn ? "无" : "None",
+                AbortBehavior.收回至雇员 => isCn ? "收回至雇员" : "Return to Retainer",
+                AbortBehavior.收回至背包 => isCn ? "收回至背包" : "Return to Inventory",
+                AbortBehavior.出售至系统商店 => isCn ? "出售至系统商店" : "Sell to NPC Vendor",
+                AbortBehavior.改价至最小值 => isCn ? "改价至最小值" : "Adjust to Min Price",
+                AbortBehavior.改价至预期值 => isCn ? "改价至预期值" : "Adjust to Expected Price",
+                AbortBehavior.改价至最高值 => isCn ? "改价至最高值" : "Adjust to Max Price",
+                _ => behavior.ToString()
+            };
+        }
+
+        private static string GetLoc(SortOrder sortOrder)
+        {
+            var isCn = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
+            return sortOrder switch
+            {
+                SortOrder.上架顺序 => isCn ? "上架顺序" : "Listing Order",
+                SortOrder.物品ID => isCn ? "物品ID" : "Item ID",
+                SortOrder.物品类型 => isCn ? "物品类型" : "Item Type",
+                _ => sortOrder.ToString()
+            };
+        }
     }
 }
 

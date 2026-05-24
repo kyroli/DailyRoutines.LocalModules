@@ -22,10 +22,10 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class WondrousTailsPredictor : ModuleBase
 {
-    public override ModuleInfo Info { get; } = new()
+    public override ModuleInfo Info => new()
     {
-        Title       = "天书连线概率",
-        Description = "在天书界面实时计算并显示连线概率与重排期望。",
+        Title       = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "天书连线概率" : "Wondrous Tails Predictor",
+        Description = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "在天书界面实时计算并显示连线概率与重排期望。" : "Calculates and displays line probabilities and shuffle expectations in Wondrous Tails.",
         Category    = ModuleCategory.UIOptimization,
         Author      = ["nynpsu"],
         ReportURL   = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
@@ -53,8 +53,8 @@ public unsafe class WondrousTailsPredictor : ModuleBase
         
         LocStrings = DService.Instance().ClientState.ClientLanguage switch
         {
-            ClientLanguage.English => ("Current", "Shuffle", " Line(s)"),
-            _ => ("当前", "重排", "线")
+            Dalamud.Game.ClientLanguage.ChineseSimplified => ("当前", "重排", "线"),
+            _ => ("Current", "Shuffle", " Line(s)")
         };
 
         RefreshAddon();

@@ -68,10 +68,10 @@ public class CustomAlarmsConfig : ModuleConfig
 
 public class CustomAlarms : ModuleBase
 {
-    public override ModuleInfo Info { get; } = new()
+    public override ModuleInfo Info => new()
     {
-        Title = "自定义闹钟",
-        Description = "支持多阶段时间节点提醒的自定义闹钟。支持现实时间 (LT) 与艾欧泽亚时间 (ET)。",
+        Title = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "自定义闹钟" : "Custom Alarms",
+        Description = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "支持多阶段时间节点提醒的自定义闹钟。支持现实时间 (LT) 与艾欧泽亚时间 (ET)。" : "Custom alarms with multi-stage reminders. Supports Local Time (LT) and Eorzea Time (ET).",
         Category = ModuleCategory.Notice,
         Author = ["npnpsu"],
         ReportURL = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
@@ -89,7 +89,9 @@ public class CustomAlarms : ModuleBase
     private bool anyEnabledAlarmsAndStages = false;
     private bool anyEnabledETAlarms = false;
 
-    private static readonly string[] SoundNames = { "闹铃", "八音盒", "水晶序曲", "陆行鸟", "拉诺西亚", "节日" };
+    private static readonly string[] SoundNamesCn = { "闹铃", "八音盒", "水晶序曲", "陆行鸟", "拉诺西亚", "节日" };
+    private static readonly string[] SoundNamesEn = { "Alarm", "Music Box", "Prelude", "Chocobo", "La Noscea", "Seasonal" };
+    private static string[] SoundNames => DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? SoundNamesCn : SoundNamesEn;
 
     protected override void Init()
     {
@@ -162,12 +164,12 @@ public class CustomAlarms : ModuleBase
         var framePaddingX = style.FramePadding.X;
 
         var numInputWidth = ImGui.CalcTextSize("9999").X; 
-        var testBtnWidth = ImGui.CalcTextSize("试听").X + framePaddingX * 2;
-        var deleteAlarmBtnWidth = ImGui.CalcTextSize("删除闹钟").X + framePaddingX * 4 + 10f;
-        var deleteStageBtnWidth = ImGui.CalcTextSize("删除").X + framePaddingX * 2;
-        var timeTypeComboWidth = ImGui.CalcTextSize("艾欧泽亚时间 (ET)").X + framePaddingX * 2 + frameHeight;
+        var testBtnWidth = ImGui.CalcTextSize(GetLoc("Test")).X + framePaddingX * 2;
+        var deleteAlarmBtnWidth = ImGui.CalcTextSize(GetLoc("DelAlarm")).X + framePaddingX * 4 + 10f;
+        var deleteStageBtnWidth = ImGui.CalcTextSize(GetLoc("Del")).X + framePaddingX * 2;
+        var timeTypeComboWidth = ImGui.CalcTextSize(GetLoc("ET")).X + framePaddingX * 2 + frameHeight;
 
-        if (ImGui.Button("新建闹钟"))
+        if (ImGui.Button(GetLoc("NewAlarm")))
         {
             config.Alarms.Add(new AlarmItem());
             QueueSaveConfig();
@@ -178,7 +180,7 @@ public class CustomAlarms : ModuleBase
         for (var i = 0; i < config.Alarms.Count; i++)
         {
             var alarm = config.Alarms[i];
-            var titleName = string.IsNullOrEmpty(alarm.Name) ? "未命名" : alarm.Name;
+            var titleName = string.IsNullOrEmpty(alarm.Name) ? GetLoc("Unnamed") : alarm.Name;
             var timePrefix = alarm.TimeType == TimeType.LT ? "LT" : "ET";
             
             var open = false;
@@ -198,7 +200,7 @@ public class CustomAlarms : ModuleBase
                     ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.6f, 0.15f, 0.15f, 1f));
                     ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.8f, 0.2f, 0.2f, 1f));
                     ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(0.5f, 0.1f, 0.1f, 1f));
-                    if (ImGui.Button($"删除闹钟##DeleteAlarmBtn_{i}", new Vector2(-1f, 0f)))
+                    if (ImGui.Button($"{GetLoc("DelAlarm")}##DeleteAlarmBtn_{i}", new Vector2(-1f, 0f)))
                     {
                         config.Alarms.RemoveAt(i);
                         QueueSaveConfig();
@@ -216,7 +218,7 @@ public class CustomAlarms : ModuleBase
                 ImGui.Indent();
                 
                 ImGui.AlignTextToFramePadding();
-                ImGui.Text("名称:");
+                ImGui.Text(GetLoc("NamePrefix"));
                 ImGui.SameLine(0f, itemInnerSpacingX);
                 ImGui.SetNextItemWidth(-1f);
                 var name = alarm.Name;
@@ -232,23 +234,23 @@ public class CustomAlarms : ModuleBase
                 {
                     if (mainTable)
                     {
-                        var timeInputCellWidth = numInputWidth * 2 + ImGui.CalcTextSize("时").X + ImGui.CalcTextSize("分").X + itemInnerSpacingX * 4;
+                        var timeInputCellWidth = numInputWidth * 2 + ImGui.CalcTextSize(GetLoc("Hour")).X + ImGui.CalcTextSize(GetLoc("Minute")).X + itemInnerSpacingX * 4;
 
-                        ImGui.TableSetupColumn("Label1", ImGuiTableColumnFlags.WidthFixed, ImGui.CalcTextSize("模式:").X + itemInnerSpacingX);
+                        ImGui.TableSetupColumn("Label1", ImGuiTableColumnFlags.WidthFixed, ImGui.CalcTextSize(GetLoc("ModePrefix")).X + itemInnerSpacingX);
                         ImGui.TableSetupColumn("Input1", ImGuiTableColumnFlags.WidthFixed, timeTypeComboWidth + cellPaddingX * 2);
-                        ImGui.TableSetupColumn("Label2", ImGuiTableColumnFlags.WidthFixed, ImGui.CalcTextSize("时间:").X + itemInnerSpacingX);
+                        ImGui.TableSetupColumn("Label2", ImGuiTableColumnFlags.WidthFixed, ImGui.CalcTextSize(GetLoc("TimePrefix")).X + itemInnerSpacingX);
                         ImGui.TableSetupColumn("Input2", ImGuiTableColumnFlags.WidthFixed, timeInputCellWidth + cellPaddingX * 2);
 
                         ImGui.TableNextRow();
                         
                         ImGui.TableNextColumn();
                         ImGui.AlignTextToFramePadding();
-                        ImGui.Text("模式:");
+                        ImGui.Text(GetLoc("ModePrefix"));
                         
                         ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(-1f);
                         var timeType = (int)alarm.TimeType;
-                        if (ImGui.Combo("##TimeType", ref timeType, new[] { "现实时间 (LT)", "艾欧泽亚时间 (ET)" }, 2))
+                        if (ImGui.Combo("##TimeType", ref timeType, new[] { GetLoc("LT"), GetLoc("ET") }, 2))
                         {
                             alarm.TimeType = (TimeType)timeType;
                             QueueSaveConfig();
@@ -256,7 +258,7 @@ public class CustomAlarms : ModuleBase
                         
                         ImGui.TableNextColumn();
                         ImGui.AlignTextToFramePadding();
-                        ImGui.Text("时间:");
+                        ImGui.Text(GetLoc("TimePrefix"));
                         
                         ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(numInputWidth);
@@ -268,7 +270,7 @@ public class CustomAlarms : ModuleBase
                         }
                         ImGui.SameLine(0f, itemInnerSpacingX);
                         ImGui.AlignTextToFramePadding();
-                        ImGui.Text("时");
+                        ImGui.Text(GetLoc("Hour"));
                         
                         ImGui.SameLine(0f, itemInnerSpacingX * 2);
                         ImGui.SetNextItemWidth(numInputWidth);
@@ -280,27 +282,28 @@ public class CustomAlarms : ModuleBase
                         }
                         ImGui.SameLine(0f, itemInnerSpacingX);
                         ImGui.AlignTextToFramePadding();
-                        ImGui.Text("分");
+                        ImGui.Text(GetLoc("Minute"));
                     }
                 }
 
                 ImGui.Separator();
-                ImGui.TextDisabled("提醒时段配置:");
+                ImGui.TextDisabled(GetLoc("StageConf"));
 
                 using (var stagesTable = ImRaii.Table($"StagesTable_{i}", 11, ImGuiTableFlags.None))
                 {
                     if (stagesTable)
                     {
-                        var checkboxWidthChat = frameHeight + ImGui.CalcTextSize("聊天窗口").X + itemInnerSpacingX;
-                        var checkboxWidthToast = frameHeight + ImGui.CalcTextSize("DR通知").X + itemInnerSpacingX;
-                        var checkboxWidthSound = frameHeight + ImGui.CalcTextSize("游戏闹钟").X + itemInnerSpacingX;
-                        var soundComboWidth = ImGui.CalcTextSize("水晶序曲").X + framePaddingX * 2 + 35f;
+                        var checkboxWidthChat = frameHeight + ImGui.CalcTextSize(GetLoc("ChatWin")).X + itemInnerSpacingX;
+                        var checkboxWidthToast = frameHeight + ImGui.CalcTextSize(GetLoc("DRNotif")).X + itemInnerSpacingX;
+                        var checkboxWidthSound = frameHeight + ImGui.CalcTextSize(GetLoc("GameAlarm")).X + itemInnerSpacingX;
+                        var longestSoundName = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "水晶序曲" : "Music Box";
+                        var soundComboWidth = ImGui.CalcTextSize(longestSoundName).X + framePaddingX * 2 + 35f;
 
                         ImGui.TableSetupColumn("Enabled", ImGuiTableColumnFlags.WidthFixed, frameHeight);
-                        ImGui.TableSetupColumn("Text1", ImGuiTableColumnFlags.WidthFixed, ImGui.CalcTextSize("提前").X + itemInnerSpacingX);
+                        ImGui.TableSetupColumn("Text1", ImGuiTableColumnFlags.WidthFixed, ImGui.CalcTextSize(GetLoc("Advance")).X + itemInnerSpacingX);
                         ImGui.TableSetupColumn("Minutes", ImGuiTableColumnFlags.WidthFixed, numInputWidth);
-                        ImGui.TableSetupColumn("Text2", ImGuiTableColumnFlags.WidthFixed, ImGui.CalcTextSize("分钟").X + cellPaddingX * 2);
-                        ImGui.TableSetupColumn("Text3", ImGuiTableColumnFlags.WidthFixed, ImGui.CalcTextSize("通知类型:").X + cellPaddingX * 2);
+                        ImGui.TableSetupColumn("Text2", ImGuiTableColumnFlags.WidthFixed, ImGui.CalcTextSize(GetLoc("Mins")).X + cellPaddingX * 2);
+                        ImGui.TableSetupColumn("Text3", ImGuiTableColumnFlags.WidthFixed, ImGui.CalcTextSize(GetLoc("NotifType")).X + cellPaddingX * 2);
                         ImGui.TableSetupColumn("Chat", ImGuiTableColumnFlags.WidthFixed, checkboxWidthChat + cellPaddingX * 2);
                         ImGui.TableSetupColumn("Toast", ImGuiTableColumnFlags.WidthFixed, checkboxWidthToast + cellPaddingX * 2);
                         ImGui.TableSetupColumn("Sound", ImGuiTableColumnFlags.WidthFixed, checkboxWidthSound + cellPaddingX * 2);
@@ -323,7 +326,7 @@ public class CustomAlarms : ModuleBase
                             
                             ImGui.TableNextColumn();
                             ImGui.AlignTextToFramePadding();
-                            ImGui.Text("提前");
+                            ImGui.Text(GetLoc("Advance"));
                             
                             ImGui.TableNextColumn();
                             ImGui.SetNextItemWidth(-1f);
@@ -343,15 +346,15 @@ public class CustomAlarms : ModuleBase
                             
                             ImGui.TableNextColumn();
                             ImGui.AlignTextToFramePadding();
-                            ImGui.Text("分钟");
+                            ImGui.Text(GetLoc("Mins"));
                             
                             ImGui.TableNextColumn();
                             ImGui.AlignTextToFramePadding();
-                            ImGui.Text("通知类型:");
+                            ImGui.Text(GetLoc("NotifType"));
                             
                             ImGui.TableNextColumn();
                             var enableChat = stage.EnableChat;
-                            if (ImGui.Checkbox($"聊天窗口##Chat_{i}_{j}", ref enableChat))
+                            if (ImGui.Checkbox($"{GetLoc("ChatWin")}##Chat_{i}_{j}", ref enableChat))
                             {
                                 stage.EnableChat = enableChat;
                                 QueueSaveConfig();
@@ -359,7 +362,7 @@ public class CustomAlarms : ModuleBase
                             
                             ImGui.TableNextColumn();
                             var enableToast = stage.EnableToast;
-                            if (ImGui.Checkbox($"DR通知##Toast_{i}_{j}", ref enableToast))
+                            if (ImGui.Checkbox($"{GetLoc("DRNotif")}##Toast_{i}_{j}", ref enableToast))
                             {
                                 stage.EnableToast = enableToast;
                                 QueueSaveConfig();
@@ -367,7 +370,7 @@ public class CustomAlarms : ModuleBase
                             
                             ImGui.TableNextColumn();
                             var enableSound = stage.EnableSound;
-                            if (ImGui.Checkbox($"游戏闹钟##Sound_{i}_{j}", ref enableSound))
+                            if (ImGui.Checkbox($"{GetLoc("GameAlarm")}##Sound_{i}_{j}", ref enableSound))
                             {
                                 stage.EnableSound = enableSound;
                                 QueueSaveConfig();
@@ -384,7 +387,7 @@ public class CustomAlarms : ModuleBase
                             }
 
                             ImGui.TableNextColumn();
-                            if (ImGui.Button($"试听##StageTestSoundBtn_{i}_{j}", new Vector2(-1f, 0f)))
+                            if (ImGui.Button($"{GetLoc("Test")}##StageTestSoundBtn_{i}_{j}", new Vector2(-1f, 0f)))
                             {
                                 PlaySound(stage.AlarmSound);
                             }
@@ -393,7 +396,7 @@ public class CustomAlarms : ModuleBase
                             ImGui.TableNextColumn();
                             if (alarm.Stages.Count > 1)
                             {
-                                if (ImGui.Button($"删除##StageDelete_{i}_{j}", new Vector2(-1f, 0f)))
+                                if (ImGui.Button($"{GetLoc("Del")}##StageDelete_{i}_{j}", new Vector2(-1f, 0f)))
                                 {
                                     alarm.Stages.RemoveAt(j);
                                     QueueSaveConfig();
@@ -405,7 +408,7 @@ public class CustomAlarms : ModuleBase
                     }
                 }
 
-                if (ImGui.Button($"添加提醒阶段##AddStage_{i}"))
+                if (ImGui.Button($"{GetLoc("AddStage")}##AddStage_{i}"))
                 {
                     alarm.Stages.Add(new AlarmStage());
                     QueueSaveConfig();
@@ -483,7 +486,7 @@ public class CustomAlarms : ModuleBase
                 if (stage.EnableChat && !stage.HasTriggeredChat && remainingLTMinutes <= stageMinutes)
                 {
                     stage.HasTriggeredChat = true;
-                    var message = $"距离“{alarm.Name}”的设定时间还有 {stageMinutes} 分钟";
+                    var message = string.Format(GetLoc("RemTimeMsg"), alarm.Name, stageMinutes);
                     var seString = new SeStringBuilder().AddUiForeground(31).AddText(message).AddUiForegroundOff().Build();
                     DService.Instance().Chat.Print(seString);
                 }
@@ -491,7 +494,7 @@ public class CustomAlarms : ModuleBase
                 if (stage.EnableToast && !stage.HasTriggeredToast && remainingLTMinutes <= stageMinutes)
                 {
                     stage.HasTriggeredToast = true;
-                    var msg = $"距离“{alarm.Name}”的设定时间还有 {stageMinutes} 分钟";
+                    var msg = string.Format(GetLoc("RemTimeMsg"), alarm.Name, stageMinutes);
                     NotifyHelper.Instance().NotificationInfo(msg);
                 }
 
@@ -502,5 +505,35 @@ public class CustomAlarms : ModuleBase
                 }
             }
         }
+    }
+
+    private static string GetLoc(string key)
+    {
+        var isCn = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
+        return key switch
+        {
+            "Test" => isCn ? "试听" : "Test",
+            "DelAlarm" => isCn ? "删除闹钟" : "Delete Alarm",
+            "Del" => isCn ? "删除" : "Delete",
+            "ET" => isCn ? "艾欧泽亚时间 (ET)" : "Eorzea Time (ET)",
+            "LT" => isCn ? "现实时间 (LT)" : "Local Time (LT)",
+            "NewAlarm" => isCn ? "新建闹钟" : "New Alarm",
+            "Unnamed" => isCn ? "未命名" : "Unnamed",
+            "NamePrefix" => isCn ? "名称:" : "Name:",
+            "ModePrefix" => isCn ? "模式:" : "Mode:",
+            "TimePrefix" => isCn ? "时间:" : "Time:",
+            "Hour" => isCn ? "时" : "H",
+            "Minute" => isCn ? "分" : "M",
+            "StageConf" => isCn ? "提醒时段配置:" : "Reminder Stage Configuration:",
+            "ChatWin" => isCn ? "聊天窗口" : "Chat Window",
+            "DRNotif" => isCn ? "DR通知" : "DR Notice",
+            "GameAlarm" => isCn ? "游戏闹钟" : "Game Alarm",
+            "Advance" => isCn ? "提前" : "Advance",
+            "Mins" => isCn ? "分钟" : "Mins",
+            "NotifType" => isCn ? "通知类型:" : "Notification Type:",
+            "AddStage" => isCn ? "添加提醒阶段" : "Add Reminder Stage",
+            "RemTimeMsg" => isCn ? "距离“{0}”的设定时间还有 {1} 分钟" : "Time remaining for '{0}': {1} min(s)",
+            _ => key
+        };
     }
 }
