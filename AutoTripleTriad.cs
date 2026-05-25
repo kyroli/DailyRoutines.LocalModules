@@ -13,6 +13,7 @@ using DailyRoutines.Common.Module.Models;
 using OmenTools;
 using OmenTools.Dalamud;
 using OmenTools.Extensions;
+using Lumina.Excel.Sheets;
 
 namespace DailyRoutines.ModulesPublic
 {
@@ -371,12 +372,14 @@ namespace DailyRoutines.ModulesPublic
                 {
                     try
                     {
-                        object? currentNPC = solverGameType.GetField("currentNPC")?.GetValue(externalSolverGame);
+                        var npcField = solverGameType.GetField("currentNpc") ?? solverGameType.GetField("currentNPC");
+                        object? currentNPC = npcField?.GetValue(externalSolverGame);
                         if (currentNPC != null)
                         {
                             int NPCID = (int)currentNPC.GetType().GetField("Id")!.GetValue(currentNPC)!;
                             object npcDBInstance = gameNpcDBType.GetMethod("Get", BindingFlags.Public | BindingFlags.Static)!.Invoke(null, null)!;
-                            object mapNPCs = gameNpcDBType.GetField("mapNPCs")!.GetValue(npcDBInstance)!;
+                            var mapNpcsField = gameNpcDBType.GetField("mapNpcs") ?? gameNpcDBType.GetField("mapNPCs");
+                            object mapNPCs = mapNpcsField!.GetValue(npcDBInstance)!;
                             
                             var containsKeyMethod = mapNPCs.GetType().GetMethod("ContainsKey")!;
                             if ((bool)containsKeyMethod.Invoke(mapNPCs, new object[] { NPCID })!)
@@ -396,7 +399,8 @@ namespace DailyRoutines.ModulesPublic
                                     if (cardInfo != null)
                                     {
                                         bool isOwned = (bool)gameCardInfoType!.GetField("IsOwned")!.GetValue(cardInfo)!;
-                                        uint ItemID = (uint)gameCardInfoType!.GetField("ItemID")!.GetValue(cardInfo)!;
+                                        var itemField = gameCardInfoType!.GetField("ItemId") ?? gameCardInfoType!.GetField("ItemID");
+                                        uint ItemID = (uint)itemField!.GetValue(cardInfo)!;
                                         
                                         if (sessionDroppedItemIDs.Contains(ItemID)) isOwned = true;
                                         
@@ -465,7 +469,8 @@ namespace DailyRoutines.ModulesPublic
             if (solverPreGameDecksType == null || gameCardDBType == null || gameNpcDBType == null || gameNpcInfoType == null || gameCardInfoType == null) return;
             try
             {
-                object? currentNPC = solverPreGameDecksType.GetField("preGameNPC")?.GetValue(externalSolverPreGameDecks);
+                var npcField = solverPreGameDecksType.GetField("preGameNpc") ?? solverPreGameDecksType.GetField("preGameNPC");
+                object? currentNPC = npcField?.GetValue(externalSolverPreGameDecks);
                 if (currentNPC != null)
                 {
                     var propId = currentNPC.GetType().GetProperty("Id");
@@ -478,7 +483,8 @@ namespace DailyRoutines.ModulesPublic
                     cachedNPCID = NPCID;
                     
                     object npcDBInstance = gameNpcDBType.GetMethod("Get", BindingFlags.Public | BindingFlags.Static)!.Invoke(null, null)!;
-                    object mapNPCs = gameNpcDBType.GetField("mapNPCs")!.GetValue(npcDBInstance)!;
+                    var mapNpcsField = gameNpcDBType.GetField("mapNpcs") ?? gameNpcDBType.GetField("mapNPCs");
+                    object mapNPCs = mapNpcsField!.GetValue(npcDBInstance)!;
                     
                     var containsKeyMethod = mapNPCs.GetType().GetMethod("ContainsKey")!;
                     if ((bool)containsKeyMethod.Invoke(mapNPCs, new object[] { NPCID })!)
@@ -490,8 +496,7 @@ namespace DailyRoutines.ModulesPublic
                         object cardDBInstance = gameCardDBType.GetMethod("Get", BindingFlags.Public | BindingFlags.Static)!.Invoke(null, null)!;
                         gameCardDBType.GetMethod("Refresh")!.Invoke(cardDBInstance, null);
                         
-                        Type triadCardDBType = currentNPC.GetType().Assembly.GetType("FFTriadBuddy.TriadCardDB")!;
-                        object triadCardDbInstance = triadCardDBType.GetMethod("Get", BindingFlags.Public | BindingFlags.Static)!.Invoke(null, null)!;
+                        var sheet = DService.Instance().Data.GetExcelSheet<TripleTriadCard>();
                         
                         foreach (int cardID in rewardCards)
                         {
@@ -501,12 +506,12 @@ namespace DailyRoutines.ModulesPublic
                             if (cardInfo != null)
                             {
                                 isOwned = (bool)gameCardInfoType.GetField("IsOwned")!.GetValue(cardInfo)!;
-                                ItemID = (uint)gameCardInfoType.GetField("ItemID")!.GetValue(cardInfo)!;
+                                var itemField = gameCardInfoType!.GetField("ItemId") ?? gameCardInfoType!.GetField("ItemID");
+                                ItemID = (uint)itemField!.GetValue(cardInfo)!;
                             }
                             
-                            object triadCard = triadCardDBType.GetMethod("FindById")!.Invoke(triadCardDbInstance, new object[] { cardID })!;
-                            object locString = triadCard.GetType().GetField("Name")!.GetValue(triadCard)!;
-                            string cardName = (string)locString.GetType().GetMethod("GetLocalized")!.Invoke(locString, null)!;
+                            var row = sheet?.GetRow((uint)cardID);
+                            string cardName = row?.Name.ToString() ?? $"Card #{cardID}";
                             
                             npcDropsCache.Add((cardName, isOwned, ItemID));
                         }
