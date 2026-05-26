@@ -225,7 +225,44 @@ public unsafe class WondrousTailsPredictor : ModuleBase
             }
         }
 
-        return new SeString(result);
+        var finalResult = new List<Payload>();
+        bool lastWasNewline = false;
+
+        foreach (var payload in result)
+        {
+            if (payload is NewLinePayload)
+            {
+                if (lastWasNewline) continue;
+                lastWasNewline = true;
+                finalResult.Add(payload);
+            }
+            else if (payload is TextPayload t && t.Text != null)
+            {
+                var text = t.Text;
+
+                while (lastWasNewline && text.StartsWith('\n'))
+                {
+                    text = text[1..];
+                }
+
+                while (text.Contains("\n\n"))
+                {
+                    text = text.Replace("\n\n", "\n");
+                }
+
+                if (string.IsNullOrEmpty(text)) continue;
+
+                lastWasNewline = text.EndsWith('\n');
+                finalResult.Add(new TextPayload(text));
+            }
+            else
+            {
+                lastWasNewline = false;
+                finalResult.Add(payload);
+            }
+        }
+
+        return new SeString(finalResult);
     }
 
     private void AppendProbabilityLine(SeStringBuilder sb, double[] probs, double[]? compares, string lineText)
