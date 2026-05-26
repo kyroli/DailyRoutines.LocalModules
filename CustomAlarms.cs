@@ -13,6 +13,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Dalamud.Bindings.ImGui;
 using Newtonsoft.Json;
 using OmenTools;
+using OmenTools.ImGuiOm;
 using OmenTools.Dalamud;
 using OmenTools.Info.Game;
 using OmenTools.OmenService;
@@ -52,6 +53,8 @@ public class AlarmStage
 
 public class AlarmItem
 {
+    public bool Enabled { get; set; } = true;
+    public bool Repeat { get; set; } = false;
     public string Name { get; set; } = string.Empty;
     public TimeType TimeType { get; set; } = TimeType.LT;
     
@@ -59,6 +62,8 @@ public class AlarmItem
     public int TargetMinute { get; set; } = 0;
 
     public List<AlarmStage> Stages { get; set; } = new();
+
+    [JsonIgnore] public double LastRemainingMinutes { get; set; } = -9999.0;
 }
 
 public class CustomAlarmsConfig : ModuleConfig
@@ -123,6 +128,8 @@ public class CustomAlarms : ModuleBase
 
         foreach (var alarm in config.Alarms)
         {
+            if (!alarm.Enabled) continue;
+
             var alarmHasEnabledStage = false;
             foreach (var stage in alarm.Stages)
             {
@@ -155,6 +162,7 @@ public class CustomAlarms : ModuleBase
 
     protected override void ConfigUI()
     {
+        var IsCN = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
         ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(12f, 8f));
 
         var style = ImGui.GetStyle();
@@ -163,7 +171,7 @@ public class CustomAlarms : ModuleBase
         var cellPaddingX = style.CellPadding.X;
         var framePaddingX = style.FramePadding.X;
 
-        var numInputWidth = ImGui.CalcTextSize("9999").X; 
+        var numInputWidth = ImGui.CalcTextSize("9999").X + framePaddingX * 2 + 20f; 
         var testBtnWidth = ImGui.CalcTextSize(GetLoc("Test")).X + framePaddingX * 2;
         var deleteAlarmBtnWidth = ImGui.CalcTextSize(GetLoc("DelAlarm")).X + framePaddingX * 4 + 10f;
         var deleteStageBtnWidth = ImGui.CalcTextSize(GetLoc("Del")).X + framePaddingX * 2;
@@ -194,7 +202,8 @@ public class CustomAlarms : ModuleBase
                     ImGui.TableNextRow();
                     
                     ImGui.TableNextColumn();
-                    open = ImGui.CollapsingHeader($"[{timePrefix}] {titleName} - {alarm.TargetHour:D2}:{alarm.TargetMinute:D2}###Alarm{i}");
+                    var enabledPrefix = alarm.Enabled ? "" : (IsCN ? "[已禁用] " : "[Disabled] ");
+                    open = ImGui.CollapsingHeader($"{enabledPrefix}[{timePrefix}] {titleName} - {alarm.TargetHour:D2}:{alarm.TargetMinute:D2}###Alarm{i}");
 
                     ImGui.TableNextColumn();
                     ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.6f, 0.15f, 0.15f, 1f));
@@ -216,6 +225,21 @@ public class CustomAlarms : ModuleBase
             {
                 ImGui.PushID($"AlarmData_{i}");
                 ImGui.Indent();
+
+                var alarmEnabled = alarm.Enabled;
+                if (ImGui.Checkbox($"{GetLoc("Enabled")}##Enabled_{i}", ref alarmEnabled))
+                {
+                    alarm.Enabled = alarmEnabled;
+                    QueueSaveConfig();
+                }
+                ImGui.SameLine(0f, itemInnerSpacingX * 4);
+                var alarmRepeat = alarm.Repeat;
+                if (ImGui.Checkbox($"{GetLoc("Repeat")}##Repeat_{i}", ref alarmRepeat))
+                {
+                    alarm.Repeat = alarmRepeat;
+                    QueueSaveConfig();
+                }
+                ImGui.Spacing();
                 
                 ImGui.AlignTextToFramePadding();
                 ImGui.Text(GetLoc("NamePrefix"));
@@ -339,10 +363,12 @@ public class CustomAlarms : ModuleBase
                                 }
                                 else if (int.TryParse(minutesStr, out var parsedMinutes))
                                 {
-                                    stage.Minutes = Math.Max(0, parsedMinutes);
+                                    var maxMinutes = alarm.TimeType == TimeType.ET ? 69 : 1439;
+                                    stage.Minutes = Math.Clamp(parsedMinutes, 0, maxMinutes);
                                 }
                                 QueueSaveConfig();
                             }
+                            ImGuiOm.TooltipHover(GetLoc("LimitTip"));
                             
                             ImGui.TableNextColumn();
                             ImGui.AlignTextToFramePadding();
@@ -447,6 +473,7 @@ public class CustomAlarms : ModuleBase
         for (var i = 0; i < config.Alarms.Count; i++)
         {
             var alarm = config.Alarms[i];
+            if (!alarm.Enabled) continue;
             if (alarm.Stages.Count == 0) continue;
 
             var remainingLTMinutes = 0.0;
@@ -466,6 +493,29 @@ public class CustomAlarms : ModuleBase
                 if (remainingETSeconds < -180) remainingETSeconds += 86400;
                 
                 remainingLTMinutes = (remainingETSeconds / (144.0 / 7.0)) / 60.0;
+            }
+
+            var hasJumped = alarm.LastRemainingMinutes != -9999.0 && remainingLTMinutes - alarm.LastRemainingMinutes > 10.0;
+            alarm.LastRemainingMinutes = remainingLTMinutes;
+
+            if (hasJumped)
+            {
+                if (!alarm.Repeat)
+                {
+                    alarm.Enabled = false;
+                    QueueSaveConfig();
+                    continue;
+                }
+                else
+                {
+                    for (var j = 0; j < alarm.Stages.Count; j++)
+                    {
+                        var stage = alarm.Stages[j];
+                        stage.HasTriggeredChat = false;
+                        stage.HasTriggeredToast = false;
+                        stage.HasTriggeredSound = false;
+                    }
+                }
             }
 
             for (var j = 0; j < alarm.Stages.Count; j++)
@@ -533,6 +583,9 @@ public class CustomAlarms : ModuleBase
             "NotifType" => IsCN ? "通知类型:" : "Notification Type:",
             "AddStage" => IsCN ? "添加提醒阶段" : "Add Reminder Stage",
             "RemTimeMsg" => IsCN ? "距离“{0}”的设定时间还有 {1} 分钟" : "Time remaining for '{0}': {1} min(s)",
+            "Enabled" => IsCN ? "启用闹钟" : "Enable Alarm",
+            "Repeat" => IsCN ? "每日重复" : "Daily Repeat",
+            "LimitTip" => IsCN ? "提前时间不能超过一天 (ET 最大 69 分钟 / LT 最大 1439 分钟)" : "Advance limit cannot exceed one day (ET max 69m / LT max 1439m)",
             _ => key
         };
     }
