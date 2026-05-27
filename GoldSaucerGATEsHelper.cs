@@ -31,11 +31,6 @@ public class GoldSaucerGATEsHelper : ModuleBase
 
     // --- Any Way the Wind Blows 常量 ---
     private static readonly Vector3 SafeSpot = new(66.96f, -4.48f, -24.69f);
-    private const float StageNorth = -50.76f;
-    private const float StageSouth = -21f;
-    private const float StageEast  = 85.45f;
-    private const float StageWest  = 55.6f;
-    private const uint FungahDataID = 1010476;
     private const float DotRadius = 6f;
 
     // --- Slice Is Right 常量 ---
@@ -44,7 +39,6 @@ public class GoldSaucerGATEsHelper : ModuleBase
     private readonly Dictionary<ulong, DateTime> objectSpawnTimes = [];
     
     // --- 缓存数据 ---
-    private bool isFungahPresent;
     private readonly List<OmenTools.Dalamud.Services.ObjectTable.Abstractions.ObjectKinds.IGameObject> activeSliceObjects = [];
 
     // --- 共享颜色 (ABGR Hex) ---
@@ -104,25 +98,23 @@ public class GoldSaucerGATEsHelper : ModuleBase
         var mgr = GoldSaucerManager.Instance();
         if (mgr == null) return;
         var dir = mgr->CurrentGFateDirector;
-        if (dir == null) return;
+        if (dir == null)
+        {
+            if (objectSpawnTimes.Count > 0) objectSpawnTimes.Clear();
+            if (activeSliceObjects.Count > 0) activeSliceObjects.Clear();
+            return;
+        }
         
         var gateType = (byte)dir->GateType;
+        if (gateType != 8)
+        {
+            if (objectSpawnTimes.Count > 0) objectSpawnTimes.Clear();
+            if (activeSliceObjects.Count > 0) activeSliceObjects.Clear();
+        }
 
         if (gateType == 5) // AnyWayTheWindBlows
         {
-            if (Throttler<string>.Shared.Throttle("GoldSaucerGATEsHelper_FungahCheck", 500))
-            {
-                isFungahPresent = false;
-                foreach (var obj in DService.Instance().ObjectTable)
-                {
-                    if (obj.ObjectKind == ObjectKind.EventNpc && obj.DataID == FungahDataID)
-                    {
-                        isFungahPresent = true;
-                        break;
-                    }
-                }
-            }
-            DrawAnyWayTheWindBlows();
+            DrawAnyWayTheWindBlows(dir);
         }
         else if (gateType == 8) // SliceIsRight
         {
@@ -135,19 +127,19 @@ public class GoldSaucerGATEsHelper : ModuleBase
                     if (obj.DataID is not (>= 2010777 and <= 2010779)) continue;
                     activeSliceObjects.Add(obj);
                 }
+                PruneDespawnedObjects();
             }
             DrawSliceIsRight();
         }
     }
 
-    private void DrawAnyWayTheWindBlows()
+    private unsafe void DrawAnyWayTheWindBlows(GFateDirector* dir)
     {
         var player = DService.Instance().ObjectTable.LocalPlayer;
         if (player == null) return;
-        var pos = player.Position;
-        if (pos.X <= StageWest || pos.X >= StageEast || pos.Z >= StageSouth || pos.Z <= StageNorth) return;
+        if (!dir->Flags.HasFlag(GFateDirectorFlag.IsJoined) || dir->Flags.HasFlag(GFateDirectorFlag.IsFinished)) return;
 
-        if (!isFungahPresent) return;
+        var pos = player.Position;
 
         var distSq  = Vector3.DistanceSquared(pos, SafeSpot);
         var onSpot  = distSq < 0.00025f * 0.00025f;
@@ -174,6 +166,31 @@ public class GoldSaucerGATEsHelper : ModuleBase
         }
     }
 
+    private void PruneDespawnedObjects()
+    {
+        if (objectSpawnTimes.Count == 0) return;
+
+        var toRemove = new List<ulong>();
+        foreach (var id in objectSpawnTimes.Keys)
+        {
+            var found = false;
+            for (var i = 0; i < activeSliceObjects.Count; i++)
+            {
+                if (activeSliceObjects[i].EntityID == id)
+                {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) toRemove.Add(id);
+        }
+
+        for (var i = 0; i < toRemove.Count; i++)
+        {
+            objectSpawnTimes.Remove(toRemove[i]);
+        }
+    }
+
     private void DrawSliceIsRight()
     {
         if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return;
@@ -187,12 +204,12 @@ public class GoldSaucerGATEsHelper : ModuleBase
         }
     }
 
-    private void RenderSliceObject(ulong objId, Vector3 position, float rotation, uint dataID)
+    private void RenderSliceObject(ulong objID, Vector3 position, float rotation, uint dataID)
     {
         var now = DateTime.Now;
-        if (!objectSpawnTimes.TryGetValue(objId, out var spawnTime))
+        if (!objectSpawnTimes.TryGetValue(objID, out var spawnTime))
         {
-            objectSpawnTimes[objId] = now;
+            objectSpawnTimes[objID] = now;
             return;
         }
 
