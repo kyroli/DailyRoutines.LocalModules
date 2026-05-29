@@ -47,22 +47,13 @@ public class GoldSaucerGATEsHelper : ModuleBase
     private const uint ColourSliceBlue  = 0x26FF0000;
     private const uint ColourSliceGreen = 0x2600FF00;
     private const uint ColourSliceRed   = 0x660000FF;
-    private const uint ColourWhite      = 0xFFFFFFFF;
 
     // --- 预计算数据 ---
     private static readonly float[] CircleSins = new float[40];
     private static readonly float[] CircleCoses = new float[40];
 
-    private (string Left, string Right, string Down, string Up) Loc;
-
     protected override void Init()
     {
-        Loc = DService.Instance().ClientState.ClientLanguage switch
-        {
-            Dalamud.Game.ClientLanguage.ChineseSimplified => ("向左移动", "向右移动", "向下移动", "向上移动"),
-            _ => ("Move Left", "Move Right", "Move Down", "Move Up")
-        };
-
         for (var i = 0; i < 40; i++)
         {
             var angle = MathF.PI * 2f / 40 * i;
@@ -143,27 +134,11 @@ public class GoldSaucerGATEsHelper : ModuleBase
 
         var distSq  = Vector3.DistanceSquared(pos, SafeSpot);
         var onSpot  = distSq < 0.00025f * 0.00025f;
-        var isNear  = distSq < 0.05f * 0.05f;
         var colour  = onSpot ? ColourWindGreen : ColourWindRed;
 
         if (!DService.Instance().GameGUI.WorldToScreen(SafeSpot, out var screenPos)) return;
         var drawList = ImGui.GetBackgroundDrawList();
         drawList.AddCircleFilled(screenPos, DotRadius, colour);
-
-        if (!onSpot && isNear)
-        {
-            var text = "";
-            if (pos.X - SafeSpot.X > 0.015f) text = Loc.Left;
-            else if (SafeSpot.X - pos.X > 0.015f) text = Loc.Right;
-            else if (pos.Z < SafeSpot.Z) text = Loc.Down;
-            else if (pos.Z > SafeSpot.Z) text = Loc.Up;
-
-            if (!string.IsNullOrEmpty(text))
-            {
-                var textSize = ImGui.CalcTextSize(text);
-                drawList.AddText(new Vector2(screenPos.X - textSize.X / 2, screenPos.Y + 10), ColourWhite, text);
-            }
-        }
     }
 
     private void PruneDespawnedObjects()

@@ -15,10 +15,10 @@ using OmenTools.Dalamud;
 using OmenTools.Extensions;
 using Lumina.Excel.Sheets;
 
-namespace DailyRoutines.ModulesPublic
+namespace DailyRoutines.ModulesPublic;
+
+public unsafe class AutoTripleTriad : ModuleBase
 {
-    public unsafe class AutoTripleTriad : ModuleBase
-    {
         public class Config : ModuleConfig
         {
             public bool EnableTripleTriad = false;
@@ -48,6 +48,7 @@ namespace DailyRoutines.ModulesPublic
         private int matchCount = 0;
         private bool isInMatch = false;
         private bool isResultShown = false;
+        private bool reflectionFailed = false;
 
         private long lastSelectStringTime = 0;
         private long lastRequestTime = 0;
@@ -175,6 +176,7 @@ namespace DailyRoutines.ModulesPublic
         protected override void Init()
         {
             config = LoadConfig<Config>() ?? new Config();
+            reflectionFailed = false;
 
             DService.Instance().Framework.Update += OnUpdate;
         }
@@ -186,6 +188,7 @@ namespace DailyRoutines.ModulesPublic
             isInMatch = false;
             isResultShown = false;
             matchCount = 0;
+            reflectionFailed = false;
             
             wasPrepOpen = false;
             wasAnyTriadUIOpen = false;
@@ -230,6 +233,7 @@ namespace DailyRoutines.ModulesPublic
 
         private bool TryInitializeReflection()
         {
+            reflectionFailed = true;
             try
             {
                 var assembly = AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a => a.GetName().Name == "TriadBuddy");
@@ -299,13 +303,16 @@ namespace DailyRoutines.ModulesPublic
                     triadNPCIDField == null ||
                     gameNPCInfoRewardCardsField == null || gameCardInfoIsOwnedField == null || gameCardInfoItemIDField == null)
                 {
+                    DService.Instance().Log.Warning("AutoTripleTriad: 反射获取 TriadBuddy 核心字段失败，已触发熔断拦截。");
                     return false;
                 }
 
+                reflectionFailed = false;
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
+                DService.Instance().Log.Warning($"AutoTripleTriad: 反射初始化异常: {ex.Message}，已触发熔断拦截。");
                 return false;
             }
         }
@@ -366,7 +373,7 @@ namespace DailyRoutines.ModulesPublic
 
             if (Environment.TickCount64 - lastPrepCloseTime < 3000 && isSelDeckOpen && !config.EnableTripleTriad)
             {
-                if (TryInitializeReflection())
+                if (!reflectionFailed && TryInitializeReflection())
                 {
                     config.EnableTripleTriad = true;
                     matchCount = 0;
@@ -566,7 +573,7 @@ namespace DailyRoutines.ModulesPublic
         {
             if (solverPreGameNPCField == null)
             {
-                if (!TryInitializeReflection()) return;
+                if (reflectionFailed || !TryInitializeReflection()) return;
             }
             try
             {
@@ -774,4 +781,3 @@ namespace DailyRoutines.ModulesPublic
             };
         }
     }
-}

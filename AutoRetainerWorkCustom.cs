@@ -1602,6 +1602,20 @@ public unsafe partial class AutoRetainerWorkCustom
             MoveToRetainerMarketHook.Enable();
             
             taskHelper ??= new() { TimeoutMS = 30_000, ShowDebug = true };
+            taskHelper.TimeoutAction = () =>
+            {
+                isNeedToDrawMarketListWindow = false;
+                isNeedToDrawMarketUpshelfWindow = false;
+                DService.Instance().Framework.RunOnTick(() =>
+                {
+                    var sellList = (AtkUnitBase*)DService.Instance().GameGUI.GetAddonByName("RetainerSellList").Address;
+                    if (sellList != null && sellList->IsVisible)
+                        sellList->Callback(-1);
+                    var sell = (AtkUnitBase*)DService.Instance().GameGUI.GetAddonByName("RetainerSell").Address;
+                    if (sell != null && sell->IsVisible)
+                        sell->Close(true);
+                });
+            };
 
             DService.Instance().MarketBoard.HistoryReceived   += OnHistoryReceived;
             DService.Instance().MarketBoard.OfferingsReceived += OnOfferingReceived;
@@ -3230,7 +3244,8 @@ public unsafe partial class AutoRetainerWorkCustom
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                                 return ParentModule.EnterRetainer(index);
                             },
-                            IsCN ? $"选择进入 {index} 号雇员" : $"Select {index}th retainer"
+                            IsCN ? $"选择进入 {index} 号雇员" : $"Select {index}th retainer",
+                            timeoutMS: 10000
                         );
                         taskHelper.Enqueue
                         (
@@ -3239,7 +3254,8 @@ public unsafe partial class AutoRetainerWorkCustom
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                                 return SelectString->IsAddonAndNodesReady() && RetainerManager.Instance()->GetActiveRetainer() != null;
                             },
-                            $"等待接收 {index} 号雇员的数据"
+                            $"等待接收 {index} 号雇员的数据",
+                            timeoutMS: 10000
                         );
                         taskHelper.Enqueue
                         (
@@ -3248,7 +3264,8 @@ public unsafe partial class AutoRetainerWorkCustom
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                                 return AddonSelectStringEvent.Select(SellInventoryItemsText);
                             },
-                            IsCN ? "点击进入出售玩家所持物品列表" : "Click to enter sell items list"
+                            IsCN ? "点击进入出售玩家所持物品列表" : "Click to enter sell items list",
+                            timeoutMS: 5000
                         );
                         taskHelper.Enqueue
                         (
@@ -3257,7 +3274,8 @@ public unsafe partial class AutoRetainerWorkCustom
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                                 return RetainerSellList->IsAddonAndNodesReady();
                             },
-                            IsCN ? "等待出售品列表界面完全加载" : "Wait for sell items list to load"
+                            IsCN ? "等待出售品列表界面完全加载" : "Wait for sell items list to load",
+                            timeoutMS: 5000
                         );
                         taskHelper.Enqueue
                         (
@@ -3276,7 +3294,8 @@ public unsafe partial class AutoRetainerWorkCustom
                                 if (RetainerSellList->IsAddonAndNodesReady())
                                     RetainerSellList->Callback(-1);
                             },
-                            IsCN ? "单一雇员改价完成, 发出退出出售品列表界面指令" : "Single retainer price adjustment complete, exiting sell items list"
+                            IsCN ? "单一雇员改价完成, 发出退出出售品列表界面指令" : "Single retainer price adjustment complete, exiting sell items list",
+                            timeoutMS: 5000
                         );
                         taskHelper.Enqueue
                         (
@@ -3285,7 +3304,8 @@ public unsafe partial class AutoRetainerWorkCustom
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                                 return !RetainerSellList->IsAddonAndNodesReady() && SelectString->IsAddonAndNodesReady();
                             },
-                            IsCN ? "等待确认出售品列表已退出并回到交互菜单" : "Wait to confirm exiting sell items list and return to menu"
+                            IsCN ? "等待确认出售品列表已退出并回到交互菜单" : "Wait to confirm exiting sell items list and return to menu",
+                            timeoutMS: 5000
                         );
                         taskHelper.Enqueue
                         (
@@ -3294,7 +3314,8 @@ public unsafe partial class AutoRetainerWorkCustom
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                                 return LeaveRetainer();
                             },
-                            IsCN ? "单一雇员改价完成, 返回至雇员列表界面" : "Single retainer price adjustment complete, return to retainer list"
+                            IsCN ? "单一雇员改价完成, 返回至雇员列表界面" : "Single retainer price adjustment complete, return to retainer list",
+                            timeoutMS: 5000
                         );
                     }
                 );
@@ -3363,6 +3384,7 @@ public unsafe partial class AutoRetainerWorkCustom
                                 return IsMarketItemDataReady(itemID);
                             },
                             IsCN ? $"等待 {itemName} 市场价格数据完全到达" : $"Wait for market price data of {itemName} to fully arrive",
+                            timeoutMS: 8000,
                             weight: 2
                         );
                         taskHelper.Enqueue
@@ -3386,6 +3408,7 @@ public unsafe partial class AutoRetainerWorkCustom
                                             return IsMarketItemDataReady(itemID);
                                         },
                                         IsCN ? "等待二次请求的数据完全到达" : "Wait for second request data",
+                                        timeoutMS: 8000,
                                         weight: 2
                                     );
                                     

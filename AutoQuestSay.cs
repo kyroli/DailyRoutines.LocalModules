@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -69,7 +70,7 @@ public unsafe class AutoQuestSay : ModuleBase
 
     private static readonly Regex KeyRegex = new(@"_(SAY|SAYTODO|SYSTEM)_", RegexOptions.Compiled);
     
-    private static Dictionary<string, (string IDStr, uint RowID)>? QuestNameIDCache;
+    private static FrozenDictionary<string, (string IDStr, uint RowID)>? QuestNameIDCache;
     private static bool IsCacheInitializing;
     
     #endregion
@@ -198,7 +199,7 @@ public unsafe class AutoQuestSay : ModuleBase
                 }
             }
             
-            QuestNameIDCache = cache;
+            QuestNameIDCache = cache.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         }
         finally
         {
