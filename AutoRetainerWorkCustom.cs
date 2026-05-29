@@ -64,7 +64,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
     public override ModuleInfo Info => new()
     {
         Title               = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "自动雇员作业(改)" : "Auto Retainer Work (Custom)",
-        Description         = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "基于官方同名模块修改，自动收取并重新派遣雇员。\n※ 增加了与雇员交互期间会自动开启“跳过对话”模块的功能。" : "Automatically collects and dispatches retainers.\n※ Added auto 'Skip Dialogue' when interacting with retainers.",
+        Description         = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "基于官方同名模块修改，自动收取并重新派遣雇员。\n※ 增加了与雇员交互期间会自动开启“跳过对话”模块的功能。\n※ 增加了自动改价时的超低价格倒查过滤保护，防止因个例超低价导致改价异常。" : "Automatically collects and dispatches retainers.\n※ Added auto 'Skip Dialogue' when interacting with retainers.\n※ Added fallback protection for unusual low prices when auto adjusting market price.",
         Category            = ModuleCategory.UIOperation,
         Author              = ["AtmoOmen", "nynpsu"],
         ReportURL           = "https://github.com/kyroli/DailyRoutines.LocalModules/issues",
@@ -1815,12 +1815,14 @@ public unsafe partial class AutoRetainerWorkCustom
                         items = items.Where(x => !module.playerRetainers.Contains(retainerSelector(x)));
 
                     var enumerable = items as T[] ?? items.ToArray();
-                    var minPrice   = enumerable.Length != 0 ? enumerable.Min(priceSelector) : 0;
-                    if (minPrice <= 0) continue;
+                    if (enumerable.Length == 0) continue;
+
+                    var sortedPrices = enumerable.Select(priceSelector).Where(p => p > 0).OrderBy(p => p).Take(3).ToList();
+                    if (sortedPrices.Count == 0) continue;
 
                     var cacheKey = CacheKeys.Create(itemID, isHQ);
-                    if (!cache.TryGetPrice(cacheKey, out var currentPrice) || minPrice <= currentPrice)
-                        cache.SetPrice(cacheKey, minPrice);
+                    if (!cache.TryGetPrice(cacheKey, out var currentPrice) || sortedPrices[0] <= currentPrice)
+                        cache.SetPrices(cacheKey, sortedPrices);
                 }
             }
 
@@ -1842,12 +1844,14 @@ public unsafe partial class AutoRetainerWorkCustom
                 {
                     var items      = filteredListings[isHQ];
                     var enumerable = items as T[] ?? items.ToArray();
-                    var maxPrice   = enumerable.Length != 0 ? enumerable.Max(priceSelector) : 0;
-                    if (maxPrice <= 0) continue;
+                    if (enumerable.Length == 0) continue;
+
+                    var sortedPrices = enumerable.Select(priceSelector).Where(p => p > 0).OrderBy(p => p).Take(3).ToList();
+                    if (sortedPrices.Count == 0) continue;
 
                     var cacheKey = CacheKeys.Create(itemID, isHQ);
-                    if (!cache.TryGetPrice(cacheKey, out var currentPrice) || maxPrice > currentPrice)
-                        cache.SetPrice(cacheKey, maxPrice);
+                    if (!cache.TryGetPrice(cacheKey, out var currentPrice) || sortedPrices[0] <= currentPrice)
+                        cache.SetPrices(cacheKey, sortedPrices);
                 }
             }
 
@@ -1897,6 +1901,25 @@ public unsafe partial class AutoRetainerWorkCustom
                         HistoryPriceCache.TryGetPrice(cacheKey,         out price) ||
                         HistoryPriceCache.TryGetPrice(oppositeCacheKey, out price)) &&
                        price != 0;
+            }
+
+            public static bool TryGetPricesCache(uint itemID, bool isHQ, out List<uint> prices)
+            {
+                prices = [];
+                var cacheKey         = CacheKeys.Create(itemID, isHQ);
+                var oppositeCacheKey = CacheKeys.Create(itemID, !isHQ);
+
+                // 清理过期缓存
+                CurrentPriceCache.RemoveExpiredEntries(TimeSpan.FromMinutes(CACHE_EXPIRATION_MINUTES));
+                HistoryPriceCache.RemoveExpiredEntries(TimeSpan.FromMinutes(CACHE_EXPIRATION_MINUTES));
+
+                // 按优先级尝试获取价格列表
+                if (CurrentPriceCache.TryGetPrices(cacheKey, out prices) && prices.Count > 0) return true;
+                if (CurrentPriceCache.TryGetPrices(oppositeCacheKey, out prices) && prices.Count > 0) return true;
+                if (HistoryPriceCache.TryGetPrices(cacheKey, out prices) && prices.Count > 0) return true;
+                if (HistoryPriceCache.TryGetPrices(oppositeCacheKey, out prices) && prices.Count > 0) return true;
+
+                return false;
             }
 
             public static (DateTime Current, DateTime History) GetCacheTimes() => 
@@ -1950,11 +1973,36 @@ public unsafe partial class AutoRetainerWorkCustom
                 return false;
             }
 
+            public bool TryGetPrices(string key, out List<uint> prices)
+            {
+                prices = [];
+
+                if (data.TryGetValue(key, out var entry))
+                {
+                    prices = entry.Prices;
+                    return true;
+                }
+
+                return false;
+            }
+
             public void SetPrice(string key, uint price)
             {
                 data[key] = new CacheEntry
                 {
                     Price          = price,
+                    Prices         = [price],
+                    LastUpdateTime = StandardTimeManager.Instance().Now
+                };
+                LastUpdateTime = StandardTimeManager.Instance().Now;
+            }
+
+            public void SetPrices(string key, List<uint> prices)
+            {
+                data[key] = new CacheEntry
+                {
+                    Price          = prices.Count > 0 ? prices[0] : 0,
+                    Prices         = prices,
                     LastUpdateTime = StandardTimeManager.Instance().Now
                 };
                 LastUpdateTime = StandardTimeManager.Instance().Now;
@@ -1968,8 +2016,9 @@ public unsafe partial class AutoRetainerWorkCustom
 
             private class CacheEntry
             {
-                public uint     Price          { get; init; }
-                public DateTime LastUpdateTime { get; init; }
+                public uint         Price          { get; init; }
+                public List<uint>   Prices         { get; init; } = [];
+                public DateTime     LastUpdateTime { get; init; }
             }
         }
 
@@ -3456,6 +3505,50 @@ public unsafe partial class AutoRetainerWorkCustom
             );
         }
 
+        /// <summary>
+        ///     倒查并过滤意外超低物价，返回合理的当前市场最低价格
+        /// </summary>
+        private static uint GetFinalMarketPrice(ItemConfig itemConfig, List<uint> prices)
+        {
+            if (prices == null || prices.Count == 0) return 0;
+            if (prices.Count == 1) return prices[0];
+
+            var p1 = prices[0];
+            var modified1 = GetModifiedPrice(itemConfig, p1);
+
+            // 如果最低价改完后已经不低于最小值，无需倒查，直接使用 p1
+            if (modified1 >= itemConfig.PriceMinimum)
+                return p1;
+
+            // 触发了低于最小值，开始倒查
+            if (prices.Count >= 2)
+            {
+                var p2 = prices[1];
+                var modified2 = GetModifiedPrice(itemConfig, p2);
+
+                // 判定 p1 是否是意外低价（低于 p2 的 50% 且 p2 改价后正常）
+                if (p1 * 2 < p2 && modified2 >= itemConfig.PriceMinimum)
+                {
+                    // 确认 p1 是意外低价。如果还有 p3，递归检查 p2 是否相对于 p3 也是意外低价
+                    if (prices.Count >= 3)
+                    {
+                        var p3 = prices[2];
+                        var modified3 = GetModifiedPrice(itemConfig, p3);
+
+                        if (p2 * 2 < p3 && modified3 >= itemConfig.PriceMinimum)
+                        {
+                            // p2 也是意外低价，使用 p3
+                            return p3;
+                        }
+                    }
+                    // 否则使用 p2
+                    return p2;
+                }
+            }
+
+            return p1;
+        }
+
         private void EnqueuePriceAdjustSingleItem(ushort slot, uint marketPrice, uint forcePrice = 0)
         {
             if (taskHelper.AbortByConflictKey(ParentModule)) return;
@@ -3464,8 +3557,39 @@ public unsafe partial class AutoRetainerWorkCustom
             var itemMarketData = GetRetainerMarketItem(slot);
             if (itemMarketData == null) return;
 
-            var itemConfig    = GetItemConfigByItemKey(itemMarketData.Value.Item);
-            var modifiedPrice = forcePrice > 0 ? forcePrice : GetModifiedPrice(itemConfig, marketPrice);
+            var itemConfig = GetItemConfigByItemKey(itemMarketData.Value.Item);
+
+            var finalMarketPrice = marketPrice;
+            if (forcePrice == 0 && PriceCacheManager.TryGetPricesCache(itemMarketData.Value.Item.itemID, itemMarketData.Value.Item.IsHQ, out var prices))
+            {
+                finalMarketPrice = GetFinalMarketPrice(itemConfig, prices);
+            }
+
+            if (finalMarketPrice != marketPrice)
+            {
+                if (ParentModule.config.SendPriceAdjustProcessMessage)
+                {
+                    var itemPayload = new SeStringBuilder().AddItemLink(itemMarketData.Value.Item.itemID, itemMarketData.Value.Item.IsHQ).Build();
+                    var builder = new SeStringBuilder();
+                    if (IsCN)
+                    {
+                        builder.AddText("检测到 ")
+                               .Append(itemPayload)
+                               .AddText($" 存在意外超低价 {marketPrice.ToChineseString()}，已自动倒查并使用正常物价 {finalMarketPrice.ToChineseString()} 进行改价。");
+                    }
+                    else
+                    {
+                        builder.AddText("Detected unusual low price ")
+                               .AddText(marketPrice.ToChineseString())
+                               .AddText(" for ")
+                               .Append(itemPayload)
+                               .AddText($", automatically fallback to normal price {finalMarketPrice.ToChineseString()}.");
+                    }
+                    DService.Instance().Chat.Print(builder.Build());
+                }
+            }
+
+            var modifiedPrice = forcePrice > 0 ? forcePrice : GetModifiedPrice(itemConfig, finalMarketPrice);
 
             // 价格为 0
             if (modifiedPrice == 0) return;
@@ -3478,7 +3602,7 @@ public unsafe partial class AutoRetainerWorkCustom
                     itemConfig,
                     itemMarketData.Value.Price,
                     modifiedPrice,
-                    marketPrice,
+                    finalMarketPrice,
                     out var abortCondition,
                     out var abortBehavior
                 ))
