@@ -40,6 +40,7 @@ public class GoldSaucerGATEsHelper : ModuleBase
     
     // --- 缓存数据 ---
     private readonly List<OmenTools.Dalamud.Services.ObjectTable.Abstractions.ObjectKinds.IGameObject> activeSliceObjects = [];
+    private readonly List<ulong> toRemoveList = [];
 
     // --- 共享颜色 (ABGR Hex) ---
     private const uint ColourWindGreen  = 0xFF00FF00;
@@ -71,6 +72,7 @@ public class GoldSaucerGATEsHelper : ModuleBase
         WindowManager.Instance().PostDraw -= OnDraw;
         objectSpawnTimes.Clear();
         activeSliceObjects.Clear();
+        toRemoveList.Clear();
     }
 
     private void OnTerritoryChanged(uint territory)
@@ -145,7 +147,7 @@ public class GoldSaucerGATEsHelper : ModuleBase
     {
         if (objectSpawnTimes.Count == 0) return;
 
-        var toRemove = new List<ulong>();
+        toRemoveList.Clear();
         foreach (var id in objectSpawnTimes.Keys)
         {
             var found = false;
@@ -157,12 +159,12 @@ public class GoldSaucerGATEsHelper : ModuleBase
                     break;
                 }
             }
-            if (!found) toRemove.Add(id);
+            if (!found) toRemoveList.Add(id);
         }
 
-        for (var i = 0; i < toRemove.Count; i++)
+        for (var i = 0; i < toRemoveList.Count; i++)
         {
-            objectSpawnTimes.Remove(toRemove[i]);
+            objectSpawnTimes.Remove(toRemoveList[i]);
         }
     }
 
@@ -211,6 +213,8 @@ public class GoldSaucerGATEsHelper : ModuleBase
     {
         var gameGUI  = DService.Instance().GameGUI;
         var drawList = ImGui.GetBackgroundDrawList();
+        var io       = ImGui.GetIO();
+        var displaySize = io.DisplaySize;
 
         var halfWidth = width / 2f;
         
@@ -220,39 +224,51 @@ public class GoldSaucerGATEsHelper : ModuleBase
         var sinRotPerp = MathF.Sin(rotation + HalfPi);
         var cosRotPerp = MathF.Cos(rotation + HalfPi);
 
-        var v1 = new Vector3(
+        var curRight = new Vector3(
             origin.X + halfWidth * sinRotPerp,
             origin.Y,
             origin.Z + halfWidth * cosRotPerp);
         
-        var v2 = new Vector3(
+        var curLeft = new Vector3(
             origin.X - halfWidth * sinRotPerp,
             origin.Y,
             origin.Z - halfWidth * cosRotPerp);
 
-        var v3 = new Vector3(
-            v2.X + length * sinRot,
-            v2.Y,
-            v2.Z + length * cosRot);
+        var curCenter = origin;
 
-        var v4 = new Vector3(
-            v1.X + length * sinRot,
-            v1.Y,
-            v1.Z + length * cosRot);
+        const int segments = 20;
+        var stepLen = length / segments;
+        var stepOffset = new Vector3(stepLen * sinRot, 0f, stepLen * cosRot);
 
-        var anyVisible = false;
-        anyVisible |= gameGUI.WorldToScreen(v1, out var sp1);
-        anyVisible |= gameGUI.WorldToScreen(v2, out var sp2);
-        anyVisible |= gameGUI.WorldToScreen(v3, out var sp3);
-        anyVisible |= gameGUI.WorldToScreen(v4, out var sp4);
-
-        if (anyVisible)
+        for (var i = 0; i < segments; i++)
         {
-            drawList.PathLineTo(sp1);
-            drawList.PathLineTo(sp2);
-            drawList.PathLineTo(sp3);
-            drawList.PathLineTo(sp4);
-            drawList.PathFillConvex(colour);
+            var nextRight  = curRight + stepOffset;
+            var nextLeft   = curLeft + stepOffset;
+            var nextCenter = curCenter + stepOffset;
+
+            var points = new[] { nextLeft, nextCenter, nextRight, curRight, curCenter, curLeft };
+            var anyVisible = false;
+
+            drawList.PathClear();
+            foreach (var pt in points)
+            {
+                if (gameGUI.WorldToScreen(pt, out var sp))
+                {
+                    if (sp.X >= 0f && sp.X <= displaySize.X && sp.Y >= 0f && sp.Y <= displaySize.Y)
+                        anyVisible = true;
+
+                    drawList.PathLineTo(sp);
+                }
+            }
+
+            if (anyVisible)
+                drawList.PathFillConvex(colour);
+            else
+                drawList.PathClear();
+
+            curRight = nextRight;
+            curLeft = nextLeft;
+            curCenter = nextCenter;
         }
     }
 
