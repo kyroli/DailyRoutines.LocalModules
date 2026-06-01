@@ -432,6 +432,14 @@ public unsafe class AutoTripleTriad : ModuleBase
                     config.EnableTripleTriad = false;
                     SaveConfig(config);
                     DService.Instance().Chat.Print(GetLoc("DoneCount"));
+
+                    var selectString = (FFXIVClientStructs.FFXIV.Client.UI.AddonSelectString*)addon;
+                    var popupMenu = (FFXIVClientStructs.FFXIV.Client.UI.PopupMenu*)((byte*)selectString + 0x238);
+                    int exitIndex = popupMenu->EntryCount - 1;
+                    if (exitIndex >= 0)
+                    {
+                        addon->Callback(exitIndex);
+                    }
                     return;
                 }
                 
