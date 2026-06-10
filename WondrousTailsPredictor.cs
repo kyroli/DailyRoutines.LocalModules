@@ -26,7 +26,7 @@ public unsafe class WondrousTailsPredictor : ModuleBase
     {
         Title       = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "天书连线概率" : "Wondrous Tails Predictor",
         Description = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "在天书界面实时计算并显示连线概率与重排期望。" : "Calculates and displays line probabilities and shuffle expectations in Wondrous Tails.",
-        Category    = ModuleCategory.UIOptimization,
+        Category    = ModuleCategory.Interface,
         Author      = ["nynpsu"],
         ReportURL   = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
     };

@@ -65,7 +65,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
     {
         Title               = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "自动雇员作业(改)" : "Auto Retainer Work (Custom)",
         Description         = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "基于官方同名模块修改，自动收取并重新派遣雇员。\n※ 增加了与雇员交互期间会自动开启“跳过对话”模块的功能。\n※ 增加了自动改价时的超低价格倒查过滤保护，防止因个例超低价导致改价异常。" : "Automatically collects and dispatches retainers.\n※ Added auto 'Skip Dialogue' when interacting with retainers.\n※ Added fallback protection for unusual low prices when auto adjusting market price.",
-        Category            = ModuleCategory.UIOperation,
+        Category            = ModuleCategory.Interface,
         Author              = ["AtmoOmen", "nynpsu"],
         ReportURL           = "https://github.com/kyroli/DailyRoutines.LocalModules/issues",
         ModulesPrerequisite = ["AutoRefreshMarketSearchResult"]
