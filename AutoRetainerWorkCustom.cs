@@ -106,13 +106,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
         foreach (var worker in workers)
             worker.Init();
 
-        addon ??= new(this)
-        {
-            InternalName          = "DRAutoRetainerWorkCustom",
-            Title                 = Info.Title,
-            Size                  = new(260f, 320f),
-            RememberClosePosition = true
-        };
+        addon ??= new(this);
 
         DService.Instance().Condition.ConditionChange += OnConditionChanged;
 
@@ -1065,12 +1059,27 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
         }
     }
 
-    private class DRAutoRetainerWork
-    (
-        AutoRetainerWorkCustom module
-    ) : AttachedAddon("RetainerList")
+    private class DRAutoRetainerWork : AttachedAddon
     {
+        private readonly AutoRetainerWorkCustom module;
+        private readonly bool isFullyConstructed;
         private TreeListNode? treeListNode;
+
+        [System.Diagnostics.CodeAnalysis.SetsRequiredMembers]
+        public DRAutoRetainerWork(AutoRetainerWorkCustom module) : base("RetainerList")
+        {
+            this.module = module;
+
+            InternalName          = "DRAutoRetainerWorkCustom";
+            Title                 = module.Info.Title;
+            Size                  = new(260f, 320f);
+            RememberClosePosition = true;
+
+            isFullyConstructed = true;
+
+            if (CanOpenAddon)
+                Open();
+        }
 
         protected override Vector2 PositionOffset =>
             new(0f, 6f);
@@ -1117,7 +1126,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
 
         protected override bool CanCloseHostAddon(AtkUnitBase* hostAddon) => false;
 
-        protected override bool CanOpenAddon => !module.IsAnyWorkerBusy();
+        protected override bool CanOpenAddon => isFullyConstructed && !module.IsAnyWorkerBusy();
     }
 
     #region 模块界面
