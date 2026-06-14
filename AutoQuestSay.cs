@@ -285,8 +285,7 @@ public unsafe class AutoQuestSay : ModuleBase
                 continue;
 
             currentEntries.Add((titleText, detailText));
-            currentHash = currentHash * 31 + titleText.GetHashCode();
-            currentHash = currentHash * 31 + detailText.GetHashCode();
+            currentHash = HashCode.Combine(currentHash, titleText, detailText);
         }
 
         if (currentHash == LastQuestDataHash) return;
@@ -369,7 +368,7 @@ public unsafe class AutoQuestSay : ModuleBase
             if (string.IsNullOrEmpty(qidRaw) || CurrentSayRegex == null) return string.Empty;
 
             var matches = CurrentSayRegex.Matches(detail);
-            var matchStrings = matches.Cast<Match>()
+            var matchStrings = matches
                 .Select(m => m.Groups.Cast<Group>().Skip(1).FirstOrDefault(g => g.Success)?.Value ?? m.Value)
                 .Distinct()
                 .ToList();
@@ -377,7 +376,7 @@ public unsafe class AutoQuestSay : ModuleBase
             if (matchStrings.Count == 0) return string.Empty;
 
             var qidStr = qidRaw.PadLeft(5, '0');
-            var dir = qidStr.Substring(qidStr.Length - 5, 3);
+            var dir = qidStr[^5..^2];
             var sheetName = $"quest/{dir}/{qidStr}";
 
             if (!DialogueSheets.TryGetValue(sheetName, out var dialogueSheet))

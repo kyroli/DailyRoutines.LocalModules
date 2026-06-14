@@ -4063,7 +4063,7 @@ public unsafe partial class AutoRetainerWorkCustom
         private static string GetLoc(AbortCondition condition)
         {
             var IsCN = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
-            var names = new List<string>();
+            List<string> names = [];
             foreach (AbortCondition c in Enum.GetValues<AbortCondition>())
             {
                 if (condition.HasFlag(c))

@@ -49,6 +49,8 @@ public unsafe class AutoTripleTriad : ModuleBase
         private bool isInMatch = false;
         private bool isResultShown = false;
         private bool reflectionFailed = false;
+        private bool isReflectionInitialized = false;
+        private static bool isCN = false;
 
         private long lastSelectStringTime = 0;
         private long lastRequestTime = 0;
@@ -177,6 +179,8 @@ public unsafe class AutoTripleTriad : ModuleBase
         {
             config = LoadConfig<Config>() ?? new Config();
             reflectionFailed = false;
+            isReflectionInitialized = false;
+            isCN = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
 
             DService.Instance().Framework.Update += OnUpdate;
         }
@@ -189,6 +193,7 @@ public unsafe class AutoTripleTriad : ModuleBase
             isResultShown = false;
             matchCount = 0;
             reflectionFailed = false;
+            isReflectionInitialized = false;
             
             wasPrepOpen = false;
             wasAnyTriadUIOpen = false;
@@ -233,6 +238,7 @@ public unsafe class AutoTripleTriad : ModuleBase
 
         private bool TryInitializeReflection()
         {
+            if (isReflectionInitialized) return true;
             reflectionFailed = true;
             try
             {
@@ -308,6 +314,7 @@ public unsafe class AutoTripleTriad : ModuleBase
                 }
 
                 reflectionFailed = false;
+                isReflectionInitialized = true;
                 return true;
             }
             catch (Exception ex)
@@ -616,13 +623,13 @@ public unsafe class AutoTripleTriad : ModuleBase
                             
                             object cardDBInstance = gameCardDBGetMethod!.Invoke(null, null)!;
                             if (cardDBInstance == null) return;
-                            gameCardDBRefreshMethod!.Invoke(cardDBInstance, Array.Empty<object>());
+                            gameCardDBRefreshMethod!.Invoke(cardDBInstance, []);
                             
                             var sheet = DService.Instance().Data.GetExcelSheet<TripleTriadCard>();
                             
                             foreach (int cardID in rewardCards)
                             {
-                                object? cardInfo = gameCardDBFindByIDMethod!.Invoke(cardDBInstance, new object[] { cardID });
+                                object? cardInfo = gameCardDBFindByIDMethod!.Invoke(cardDBInstance, [cardID]);
                                 bool isOwned = false;
                                 uint ItemID = 0;
                                 if (cardInfo != null)
@@ -765,7 +772,7 @@ public unsafe class AutoTripleTriad : ModuleBase
 
         private static string GetLoc(string key)
         {
-            var IsCN = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
+            var IsCN = isCN;
             return key switch
             {
                 "StopAuto" => IsCN ? "停止自动打牌" : "Stop Auto Play",

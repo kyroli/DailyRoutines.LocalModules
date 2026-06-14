@@ -246,7 +246,7 @@ public class GoldSaucerGATEsHelper : ModuleBase
             var nextLeft   = curLeft + stepOffset;
             var nextCenter = curCenter + stepOffset;
 
-            var points = new[] { nextLeft, nextCenter, nextRight, curRight, curCenter, curLeft };
+            Vector3[] points = [nextLeft, nextCenter, nextRight, curRight, curCenter, curLeft];
             var anyVisible = false;
 
             drawList.PathClear();

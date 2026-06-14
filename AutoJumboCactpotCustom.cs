@@ -38,7 +38,7 @@ public class AutoJumboCactpotCustom : ModuleBase
     
     // 用于实现“随机一次”的临时状态
     private int    sessionRandomNumber = -1;
-    private double lastExecuteTime     = 0;
+    private long lastExecuteTime     = 0;
 
     protected override unsafe void Init()
     {
@@ -122,7 +122,7 @@ public class AutoJumboCactpotCustom : ModuleBase
                 if (!LotteryWeeklyInput->IsAddonAndNodesReady()) return false;
 
                 var number = 0;
-                var currentTime = ImGui.GetTime();
+                var currentTime = Environment.TickCount64;
 
                 switch (config.NumberMode)
                 {
@@ -133,8 +133,8 @@ public class AutoJumboCactpotCustom : ModuleBase
                         number = Math.Clamp(config.FixedNumber, 0, 9999);
                         break;
                     case Mode.RandomOnce:
-                        // 如果距离上次执行超过 15 秒，或者是第一次执行，则重新生成随机数
-                        if (currentTime - lastExecuteTime > 15 || sessionRandomNumber == -1)
+                        // 如果距离上次执行超过 15 秒 (15000 毫秒)，或者是第一次执行，则重新生成随机数
+                        if (currentTime - lastExecuteTime > 15000 || sessionRandomNumber == -1)
                         {
                             sessionRandomNumber = Random.Shared.Next(0, 10000);
                         }

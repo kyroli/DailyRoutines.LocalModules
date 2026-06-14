@@ -267,17 +267,16 @@ public unsafe class WondrousTailsPredictor : ModuleBase
         }
         else if (beforeText.Length == 0 && tempPayloads.Count > 0)
         {
-            var lastIdx = tempPayloads.Count - 1;
-            var last = tempPayloads[lastIdx];
+            var last = tempPayloads[^1];
             if (last is NewLinePayload)
             {
-                tempPayloads.RemoveAt(lastIdx);
+                tempPayloads.RemoveAt(tempPayloads.Count - 1);
             }
             else if (last is TextPayload prevTextPayload && prevTextPayload.Text != null && prevTextPayload.Text.EndsWith('\n'))
             {
                 var prevText = prevTextPayload.Text;
-                if (prevText.Length == 1) tempPayloads.RemoveAt(lastIdx);
-                else tempPayloads[lastIdx] = new TextPayload(prevText[..^1]);
+                if (prevText.Length == 1) tempPayloads.RemoveAt(tempPayloads.Count - 1);
+                else tempPayloads[^1] = new TextPayload(prevText[..^1]);
             }
         }
 
