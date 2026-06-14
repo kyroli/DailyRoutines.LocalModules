@@ -36,6 +36,18 @@ public class GoldSaucerGATEsHelper : ModuleBase
     // --- Slice Is Right 常量 ---
     private static float HalfPi => MathF.PI / 2f;
     private const float MaxDistanceSquared = 30f * 30f;
+    
+    private const double TelegraphDelaySeconds = 5;
+    private const double TelegraphDurationSeconds = 7;
+
+    private const uint GimmickSingleRect = 2010777;
+    private const uint GimmickDoubleRect = 2010778;
+    private const uint GimmickCircle = 2010779;
+
+    private const uint HelperSingleRectOID = 0x1EAE99;
+    private const uint HelperDoubleRectOID = 0x1EAE9A;
+    private const uint HelperCircleOID = 0x1EAE9B;
+
     private readonly Dictionary<ulong, DateTime> objectSpawnTimes = [];
     
     // --- 缓存数据 ---
@@ -52,6 +64,39 @@ public class GoldSaucerGATEsHelper : ModuleBase
     // --- 预计算数据 ---
     private static readonly float[] CircleSins = new float[40];
     private static readonly float[] CircleCoses = new float[40];
+
+    private static bool IsTelegraphVisible(DateTime firstSeen)
+    {
+        var now = DateTime.Now;
+        var visibleFrom = firstSeen.AddSeconds(TelegraphDelaySeconds);
+        var visibleUntil = visibleFrom.AddSeconds(TelegraphDurationSeconds);
+        return now >= visibleFrom && now < visibleUntil;
+    }
+
+    private static unsafe bool TryGetSliceHelperType(OmenTools.Dalamud.Services.ObjectTable.Abstractions.ObjectKinds.IGameObject gameObject, out uint helperType)
+    {
+        helperType = 0;
+        if (!gameObject.IsValid()) return false;
+        
+        if (gameObject.ObjectKind == ObjectKind.EventObj)
+        {
+            var gimmickId = ((FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject*)gameObject.Address)->GimmickId;
+            if (gimmickId is >= GimmickSingleRect and <= GimmickCircle)
+            {
+                helperType = gimmickId;
+                return true;
+            }
+        }
+
+        helperType = gameObject.DataID switch
+        {
+            HelperSingleRectOID => GimmickSingleRect,
+            HelperDoubleRectOID => GimmickDoubleRect,
+            HelperCircleOID => GimmickCircle,
+            _ => 0
+        };
+        return helperType != 0;
+    }
 
     protected override void Init()
     {
@@ -116,9 +161,10 @@ public class GoldSaucerGATEsHelper : ModuleBase
                 activeSliceObjects.Clear();
                 foreach (var obj in DService.Instance().ObjectTable)
                 {
-                    if (obj.ObjectKind != ObjectKind.EventObj) continue;
-                    if (obj.DataID is not (>= 2010777 and <= 2010779)) continue;
-                    activeSliceObjects.Add(obj);
+                    if (TryGetSliceHelperType(obj, out _))
+                    {
+                        activeSliceObjects.Add(obj);
+                    }
                 }
                 PruneDespawnedObjects();
             }
@@ -148,7 +194,7 @@ public class GoldSaucerGATEsHelper : ModuleBase
         if (objectSpawnTimes.Count == 0) return;
 
         toRemoveList.Clear();
-        foreach (var id in objectSpawnTimes.Keys)
+        foreach (var (id, firstSeen) in objectSpawnTimes)
         {
             var found = false;
             for (var i = 0; i < activeSliceObjects.Count; i++)
@@ -159,7 +205,7 @@ public class GoldSaucerGATEsHelper : ModuleBase
                     break;
                 }
             }
-            if (!found) toRemoveList.Add(id);
+            if (!found || !IsTelegraphVisible(firstSeen)) toRemoveList.Add(id);
         }
 
         for (var i = 0; i < toRemoveList.Count; i++)
@@ -177,11 +223,14 @@ public class GoldSaucerGATEsHelper : ModuleBase
             var distSq = Vector3.DistanceSquared(localPlayer.Position, obj.Position);
             if (distSq > MaxDistanceSquared) continue;
 
-            RenderSliceObject(obj.EntityID, obj.Position, obj.Rotation, obj.DataID);
+            if (TryGetSliceHelperType(obj, out var helperType))
+            {
+                RenderSliceObject(obj.EntityID, obj.Position, obj.Rotation, helperType);
+            }
         }
     }
 
-    private void RenderSliceObject(ulong objID, Vector3 position, float rotation, uint dataID)
+    private void RenderSliceObject(ulong objID, Vector3 position, float rotation, uint helperType)
     {
         var now = DateTime.Now;
         if (!objectSpawnTimes.TryGetValue(objID, out var spawnTime))
@@ -190,20 +239,18 @@ public class GoldSaucerGATEsHelper : ModuleBase
             return;
         }
 
-        // 按照原版插件 SaucyCN 的逻辑，全部机关统一使用 5 秒延迟，以保证同时显示
-        var delay = 5;
-        if (spawnTime.AddSeconds(delay) > now) return;
+        if (!IsTelegraphVisible(spawnTime)) return;
 
-        switch (dataID)
+        switch (helperType)
         {
-            case 2010777: // 单刀 - 蓝色矩形
+            case GimmickSingleRect: // 单刀 - 蓝色矩形
                 DrawRectWorld(position, rotation + HalfPi, 25f, 5f, ColourSliceBlue);
                 break;
-            case 2010778: // 双刀 - 两侧绿色矩形
+            case GimmickDoubleRect: // 双刀 - 两侧绿色矩形
                 DrawRectWorld(position, rotation + HalfPi, 25f, 5f, ColourSliceGreen);
                 DrawRectWorld(position, rotation - HalfPi, 25f, 5f, ColourSliceGreen);
                 break;
-            case 2010779: // 圆形 AoE - 红色
+            case GimmickCircle: // 圆形 AoE - 红色
                 DrawFilledCircleWorld(position, 11f, ColourSliceRed);
                 break;
         }
