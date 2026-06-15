@@ -88,6 +88,7 @@ public unsafe class AutoTripleTriad : ModuleBase
         private FieldInfo? gameCardInfoIsOwnedField;
         private FieldInfo? gameCardInfoItemIDField;
 
+        private bool isTriadUIActive = false;
         private bool wasPrepOpen = false;
         private bool wasAnyTriadUIOpen = false;
         private long lastPrepCloseTime = 0;
@@ -183,12 +184,29 @@ public unsafe class AutoTripleTriad : ModuleBase
             isCN = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
 
             DService.Instance().Framework.Update += OnUpdate;
+
+            DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "TripleTriadRequest", OnTriadUIChange);
+            DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "TripleTriadSelDeck", OnTriadUIChange);
+            DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "TripleTriad", OnTriadUIChange);
+            DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "TripleTriadResult", OnTriadUIChange);
+
+            DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "TripleTriadRequest", OnTriadUIChange);
+            DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "TripleTriadSelDeck", OnTriadUIChange);
+            DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "TripleTriad", OnTriadUIChange);
+            DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "TripleTriadResult", OnTriadUIChange);
+
+            if (CheckAnyTriadUIOpen())
+            {
+                isTriadUIActive = true;
+            }
         }
 
         protected override void Uninit()
         {
             DService.Instance().Framework.Update -= OnUpdate;
+            DService.Instance().AddonLifecycle.UnregisterListener(OnTriadUIChange);
             
+            isTriadUIActive = false;
             isInMatch = false;
             isResultShown = false;
             matchCount = 0;
@@ -327,6 +345,7 @@ public unsafe class AutoTripleTriad : ModuleBase
         public void OnUpdate(IFramework framework)
         {
             if (config == null) return;
+            if (!isTriadUIActive && !wasAnyTriadUIOpen) return;
 
             var prepAddon = (AtkUnitBase*)DService.Instance().GameGUI.GetAddonByName("TripleTriadRequest").Address;
             var selDeckAddon = (AtkUnitBase*)DService.Instance().GameGUI.GetAddonByName("TripleTriadSelDeck").Address;
@@ -424,6 +443,29 @@ public unsafe class AutoTripleTriad : ModuleBase
 
                 ProcessTripleTriadResult();
             }
+        }
+
+        private void OnTriadUIChange(AddonEvent type, AddonArgs args)
+        {
+            isTriadUIActive = type switch
+            {
+                AddonEvent.PostSetup => true,
+                AddonEvent.PreFinalize => CheckAnyTriadUIOpen(),
+                _ => isTriadUIActive
+            };
+        }
+
+        private bool CheckAnyTriadUIOpen()
+        {
+            var prepAddon = (AtkUnitBase*)DService.Instance().GameGUI.GetAddonByName("TripleTriadRequest").Address;
+            var selDeckAddon = (AtkUnitBase*)DService.Instance().GameGUI.GetAddonByName("TripleTriadSelDeck").Address;
+            var gameAddon = (AtkUnitBase*)DService.Instance().GameGUI.GetAddonByName("TripleTriad").Address;
+            var resultAddon = (AtkUnitBase*)DService.Instance().GameGUI.GetAddonByName("TripleTriadResult").Address;
+
+            return (prepAddon != null && prepAddon->IsVisible) ||
+                   (selDeckAddon != null && selDeckAddon->IsVisible) ||
+                   (gameAddon != null && gameAddon->IsVisible) ||
+                   (resultAddon != null && resultAddon->IsVisible);
         }
 
         private unsafe void ProcessSelectString()

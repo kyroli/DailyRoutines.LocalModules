@@ -1,31 +1,39 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using System.Windows.Forms;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
+using Dalamud.Game.Addon.Lifecycle;
+using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.GoldSaucer;
-using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
-
+using FFXIVClientStructs.FFXIV.Component.GUI;
 using Dalamud.Bindings.ImGui;
 using OmenTools;
 using OmenTools.Dalamud;
 using OmenTools.Dalamud.Helpers;
 using OmenTools.Extensions;
+using OmenTools.Interop.Windows.Helpers;
 using OmenTools.OmenService;
 using OmenTools.Threading;
+using IGameObject = OmenTools.Dalamud.Services.ObjectTable.Abstractions.ObjectKinds.IGameObject;
+using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
+using static OmenTools.Info.Game.Data.Addons;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class GoldSaucerGATEsHelper : ModuleBase
+public unsafe class GoldSaucerGATEsHelper : ModuleBase
 {
     public override ModuleInfo Info => new()
     {
         Title = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "金碟机遇临门辅助" : "Gold Saucer GATEs Helper",
-        Description = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "1. 喷风中的幸存者：提示被吹飞概率最小的站位。\n2. 必中一闪快刀斩魔：显示竹子的倒向范围。\n※ 功能移植自 Saucy 插件。" : "1. Any Way the Wind Blows: Shows safest spot.\n2. The Slice Is Right: Shows bamboo fall area.\n※ Features ported from Saucy.",
+        Description = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified 
+            ? "1. 喷风中的幸存者：提示被吹飞概率最小的站位。\n2. 必中一闪快刀斩魔：显示竹子的倒向范围。\n3. 空军装甲驾驶员：自动瞄准并射击目标。\n※ 部分功能移植自 Saucy 插件。" 
+            : "1. Any Way the Wind Blows: Shows safest spot.\n2. The Slice Is Right: Shows bamboo fall area.\n3. Air Force One: Automatically shoots targets.\n※ Partially based on Saucy.",
         Category = ModuleCategory.GoldSaucer,
-        Author = ["Puni.sh","nynpsu"],
+        Author = ["Puni.sh", "nynpsu"],
         ReportURL = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
     };
 
@@ -51,7 +59,7 @@ public class GoldSaucerGATEsHelper : ModuleBase
     private readonly Dictionary<ulong, DateTime> objectSpawnTimes = [];
     
     // --- 缓存数据 ---
-    private readonly List<OmenTools.Dalamud.Services.ObjectTable.Abstractions.ObjectKinds.IGameObject> activeSliceObjects = [];
+    private readonly List<IGameObject> activeSliceObjects = [];
     private readonly List<ulong> toRemoveList = [];
 
     // --- 共享颜色 (ABGR Hex) ---
@@ -64,6 +72,19 @@ public class GoldSaucerGATEsHelper : ModuleBase
     // --- 预计算数据 ---
     private static readonly float[] CircleSins = new float[40];
     private static readonly float[] CircleCoses = new float[40];
+
+    // --- Air Force One 常量与状态字段 ---
+    private const int ShootInterval = 100;
+    private const int DedupExpiryMS = 2000;
+
+    private bool wasInDuty;
+    private AtkUnitBase* rideShootingAddon;
+    private readonly Dictionary<ulong, long> shotBalloons = [];
+    private ulong activeShotTargetID;
+    private long activeShotTime;
+
+    private readonly List<(Vector2 Pos, float Radius, float Dist)> bombScreenPositions = new(8);
+    private readonly List<(IGameObject obj, float dist)> candidates = new(16);
 
     private static bool IsTelegraphVisible(DateTime firstSeen)
     {
@@ -109,6 +130,14 @@ public class GoldSaucerGATEsHelper : ModuleBase
         
         DService.Instance().ClientState.TerritoryChanged += OnTerritoryChanged;
         OnTerritoryChanged(DService.Instance().ClientState.TerritoryType);
+
+        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "RideShooting", OnAddonSetup);
+        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "RideShooting", OnAddonFinalize);
+
+        if (RideShooting != null && RideShooting->IsAddonAndNodesReady())
+        {
+            OnAddonSetup(AddonEvent.PostSetup, null!);
+        }
     }
 
     protected override void Uninit()
@@ -118,6 +147,20 @@ public class GoldSaucerGATEsHelper : ModuleBase
         objectSpawnTimes.Clear();
         activeSliceObjects.Clear();
         toRemoveList.Clear();
+
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSetup);
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonFinalize);
+        
+        if (wasInDuty)
+        {
+            DService.Instance().Framework.Update -= OnFrameworkUpdate;
+        }
+
+        wasInDuty = false;
+        rideShootingAddon = null;
+        shotBalloons.Clear();
+        activeShotTargetID = 0;
+        activeShotTime = 0;
     }
 
     private void OnTerritoryChanged(uint territory)
@@ -293,7 +336,7 @@ public class GoldSaucerGATEsHelper : ModuleBase
             var nextLeft   = curLeft + stepOffset;
             var nextCenter = curCenter + stepOffset;
 
-            Vector3[] points = [nextLeft, nextCenter, nextRight, curRight, curCenter, curLeft];
+            Span<Vector3> points = stackalloc Vector3[] { nextLeft, nextCenter, nextRight, curRight, curCenter, curLeft };
             var anyVisible = false;
 
             drawList.PathClear();
@@ -345,4 +388,198 @@ public class GoldSaucerGATEsHelper : ModuleBase
         else drawList.PathClear();
     }
 
+    #region Air Force One Events & Loop
+
+    private void OnAddonSetup(AddonEvent type, AddonArgs args)
+    {
+        rideShootingAddon = args != null ? (AtkUnitBase*)args.Addon.Address : RideShooting;
+        if (rideShootingAddon == null) return;
+
+        DService.Instance().Framework.Update += OnFrameworkUpdate;
+        DService.Instance().Log.Information("[GoldSaucerGATEsHelper] Entered Air Force One GATE Duty! Registered framework update.");
+        wasInDuty = true;
+    }
+
+    private void OnAddonFinalize(AddonEvent type, AddonArgs args)
+    {
+        DService.Instance().Framework.Update -= OnFrameworkUpdate;
+        rideShootingAddon = null;
+        wasInDuty = false;
+        shotBalloons.Clear();
+        bombScreenPositions.Clear();
+        candidates.Clear();
+        DService.Instance().Log.Information("[GoldSaucerGATEsHelper] Exited Air Force One Duty. Unregistered framework update and cleaned states.");
+    }
+
+    private void OnFrameworkUpdate(Dalamud.Plugin.Services.IFramework framework)
+    {
+        if (rideShootingAddon == null || !rideShootingAddon->IsAddonAndNodesReady()) return;
+
+        var player = DService.Instance().ObjectTable.LocalPlayer;
+        if (player == null) return;
+
+        var gameGUI = DService.Instance().GameGUI;
+
+        if (activeShotTargetID != 0)
+        {
+            if (Environment.TickCount64 - activeShotTime < 50)
+            {
+                var target = DService.Instance().ObjectTable.SearchByID(activeShotTargetID);
+                if (target != null && gameGUI.WorldToScreen(target.Position, out var screenPos))
+                {
+                    TrySetScreenAim(screenPos);
+                    return;
+                }
+            }
+            activeShotTargetID = 0;
+        }
+
+        bombScreenPositions.Clear();
+        candidates.Clear();
+
+        foreach (var x in DService.Instance().ObjectTable)
+        {
+            if (x.ObjectKind != Dalamud.Game.ClientState.Objects.Enums.ObjectKind.EventObj) continue;
+
+            var dataID = x.DataID;
+            var eventObj = (FFXIVClientStructs.FFXIV.Client.Game.Object.EventObject*)x.Address;
+
+            if (dataID is 2015183 or 2009679)
+            {
+                if (eventObj->SharedTimelineState != 4)
+                {
+                    if (gameGUI.WorldToScreen(x.Position, out var bombScreen))
+                    {
+                        var topPos = x.Position + new Vector3(0, 2.0f, 0); 
+                        if (gameGUI.WorldToScreen(topPos, out var bombTopScreen))
+                        {
+                            var radius = Vector2.Distance(bombScreen, bombTopScreen);
+                            var dist = Vector3.Distance(player.Position, x.Position);
+                            bombScreenPositions.Add((bombScreen, radius + 5f, dist));
+                        }
+                        else
+                        {
+                            var dist = Vector3.Distance(player.Position, x.Position);
+                            bombScreenPositions.Add((bombScreen, 30f, dist));
+                        }
+                    }
+                }
+                continue;
+            }
+
+            if (dataID is 2009678 or 2009676 or 2009677 or 2015180 or 2015179 or 2015178)
+            {
+                if (eventObj->SharedTimelineState == 1)
+                {
+                    if (shotBalloons.TryGetValue(x.GameObjectID, out var shotTime))
+                    {
+                        if (Environment.TickCount64 - shotTime < DedupExpiryMS)
+                            continue;
+                    }
+                    var dist = Vector3.Distance(player.Position, x.Position);
+                    candidates.Add((x, dist));
+                }
+            }
+        }
+
+        candidates.Sort((a, b) => a.dist.CompareTo(b.dist));
+
+        IGameObject? bestTarget = null;
+        var bestScreen = Vector2.Zero;
+        var bestDist = 0f;
+
+        foreach (var (obj, dist) in candidates)
+        {
+            if (!gameGUI.WorldToScreen(obj.Position, out var targetScreen)) continue;
+
+            if (IsNearBombOnScreen(targetScreen, dist, bombScreenPositions))
+            {
+                if (Throttler.Shared.Throttle($"SkipLog-{obj.GameObjectID}", 1000))
+                {
+                    DService.Instance().Log.Information($"[GoldSaucerGATEsHelper] SKIP target {obj.Name} (ID={obj.DataID}) - too close to bomb on screen at {targetScreen}");
+                }
+                continue;
+            }
+
+            bestTarget = obj;
+            bestScreen = targetScreen;
+            bestDist = dist;
+            break;
+        }
+
+        if (bestTarget != null)
+        {
+            TrySetScreenAim(bestScreen);
+
+            if (Throttler.Shared.Throttle("AutoAirForceOne-Shoot", ShootInterval))
+            {
+                activeShotTargetID = bestTarget.GameObjectID;
+                activeShotTime = Environment.TickCount64;
+                shotBalloons[bestTarget.GameObjectID] = Environment.TickCount64;
+                
+                DService.Instance().Log.Information($"[GoldSaucerGATEsHelper] SHOOT: {bestTarget.Name} (ID={bestTarget.DataID}, ObjID={bestTarget.GameObjectID:X}) Pos={bestTarget.Position} Screen={bestScreen} Dist={bestDist:F1}y Bombs={bombScreenPositions.Count} Candidates={candidates.Count}");
+
+                DService.Instance().Framework.RunOnTick(() =>
+                {
+                    KeyEmulationHelper.SendKeypress(Keys.Space);
+                }, delayTicks: 1);
+            }
+        }
+    }
+
+    private static bool IsNearBombOnScreen(Vector2 targetScreen, float targetDist, List<(Vector2 Pos, float Radius, float Dist)> bombScreenPositions)
+    {
+        foreach (var bomb in bombScreenPositions)
+        {
+            if (bomb.Dist < targetDist || bomb.Dist - targetDist < 5.0f)
+            {
+                var dx = targetScreen.X - bomb.Pos.X;
+                var dy = targetScreen.Y - bomb.Pos.Y;
+                if (dx * dx + dy * dy < bomb.Radius * bomb.Radius)
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TrySetScreenAim(Vector2 screen)
+    {
+        var agent = AgentRideShooting.TryGet();
+        var handler = agent != null ? agent->Handler : null;
+        if (handler == null || (nint)handler < 0x10000 || ((nint)handler & 7) != 0) return false;
+
+        handler->AimScreenX = screen.X;
+        handler->AimScreenY = screen.Y;
+        return true;
+    }
+
+    #endregion
+
+    #region Air Force One Interop Definitions
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 0x38)]
+    private struct AgentRideShooting
+    {
+        [System.Runtime.InteropServices.FieldOffset(0x00)] public FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentInterface AgentInterface;
+
+        [System.Runtime.InteropServices.FieldOffset(0x30)] public RideShootingHandler* Handler;
+
+        public static AgentRideShooting* TryGet()
+        {
+            var module = FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentModule.Instance();
+            if (module == null) return null;
+
+            return (AgentRideShooting*)module->GetAgentByInternalId(FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentId.RideShooting);
+        }
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 0xC78)]
+    private struct RideShootingHandler
+    {
+        [System.Runtime.InteropServices.FieldOffset(0xC70)] public float AimScreenX;
+        [System.Runtime.InteropServices.FieldOffset(0xC74)] public float AimScreenY;
+    }
+
+    #endregion
 }
