@@ -81,11 +81,9 @@ public unsafe class WondrousTailsPredictor : ModuleBase
     }
 
     private ushort PrevMask = 0xFFFF;
-    private bool IsOurTextAttached;
-    private nint PrevTextPtr = nint.Zero;
-
     private (string Current, string Line) LocStrings;
     private string LocMarker = string.Empty;
+    private byte[]? LocMarkerBytes;
 
     protected override void Init()
     {
@@ -100,10 +98,9 @@ public unsafe class WondrousTailsPredictor : ModuleBase
             _ => ("Current", " Line(s)")
         };
         LocMarker = $"{LocStrings.Current}: ";
+        LocMarkerBytes = System.Text.Encoding.UTF8.GetBytes(LocMarker);
 
         PrevMask = 0xFFFF;
-        IsOurTextAttached = false;
-        PrevTextPtr = nint.Zero;
         RefreshAddon();
     }
 
@@ -115,25 +112,28 @@ public unsafe class WondrousTailsPredictor : ModuleBase
 
     private void OnAddonEvent(AddonEvent type, AddonArgs args)
     {
-        if (args.Addon.Address == nint.Zero) return;
-        
-        switch (type)
+        try
         {
-            case AddonEvent.PostSetup:
-            case AddonEvent.PostRefresh:
-                PrevMask = 0xFFFF;
-                IsOurTextAttached = false;
-                PrevTextPtr = nint.Zero;
-                UpdateProbabilities((AddonWeeklyBingo*)args.Addon.Address);
-                break;
-            case AddonEvent.PostUpdate:
-                UpdateProbabilities((AddonWeeklyBingo*)args.Addon.Address);
-                break;
-            case AddonEvent.PreFinalize:
-                PrevMask = 0xFFFF;
-                IsOurTextAttached = false;
-                PrevTextPtr = nint.Zero;
-                break;
+            if (args.Addon.Address == nint.Zero) return;
+            
+            switch (type)
+            {
+                case AddonEvent.PostSetup:
+                case AddonEvent.PostRefresh:
+                    PrevMask = 0xFFFF;
+                    UpdateProbabilities((AddonWeeklyBingo*)args.Addon.Address);
+                    break;
+                case AddonEvent.PostUpdate:
+                    UpdateProbabilities((AddonWeeklyBingo*)args.Addon.Address);
+                    break;
+                case AddonEvent.PreFinalize:
+                    PrevMask = 0xFFFF;
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            DService.Instance().Log.Error(ex, "WondrousTailsPredictor exception in OnAddonEvent");
         }
     }
 
@@ -143,8 +143,6 @@ public unsafe class WondrousTailsPredictor : ModuleBase
         if (ptr != nint.Zero)
         {
             PrevMask = 0xFFFF;
-            IsOurTextAttached = false;
-            PrevTextPtr = nint.Zero;
             UpdateProbabilities((AddonWeeklyBingo*)ptr);
         }
     }
@@ -161,9 +159,33 @@ public unsafe class WondrousTailsPredictor : ModuleBase
             var currentSeString = MemoryHelper.ReadSeStringNullTerminated((nint)node->NodeText.StringPtr.Value);
             var baseText = StripOurText(currentSeString, out _);
             node->SetText(baseText.Encode());
-            IsOurTextAttached = false;
-            PrevTextPtr = nint.Zero;
         }
+    }
+
+    private bool NativeStringContainsMarker(nint ptr)
+    {
+        if (ptr == nint.Zero || LocMarkerBytes == null || LocMarkerBytes.Length == 0) return false;
+        var p = (byte*)ptr;
+        var len = LocMarkerBytes.Length;
+        var firstByte = LocMarkerBytes[0];
+        while (*p != 0)
+        {
+            if (*p == firstByte)
+            {
+                var match = true;
+                for (var i = 1; i < len; i++)
+                {
+                    if (p[i] == 0 || p[i] != LocMarkerBytes[i])
+                    {
+                        match = false;
+                        break;
+                    }
+                }
+                if (match) return true;
+            }
+            p++;
+        }
+        return false;
     }
 
     private void UpdateProbabilities(AddonWeeklyBingo* addon)
@@ -184,26 +206,19 @@ public unsafe class WondrousTailsPredictor : ModuleBase
         var textNode = addon->StringThing.TextNode;
         if (textNode == null || textNode->NodeText.StringPtr.Value == null) return;
 
-        if (currentMask == PrevMask && IsOurTextAttached && (nint)textNode->NodeText.StringPtr.Value == PrevTextPtr) return;
+        var currentPtr = (nint)textNode->NodeText.StringPtr.Value;
+        if (currentMask == PrevMask && NativeStringContainsMarker(currentPtr)) return;
 
-        var currentSeString = MemoryHelper.ReadSeStringNullTerminated((nint)textNode->NodeText.StringPtr.Value);
-        var strippedSeString = StripOurText(currentSeString, out var hasOurText);
-
-        if (currentMask == PrevMask && hasOurText)
-        {
-            IsOurTextAttached = true;
-            PrevTextPtr = (nint)textNode->NodeText.StringPtr.Value;
-            return;
-        }
+        var currentSeString = MemoryHelper.ReadSeStringNullTerminated(currentPtr);
+        var strippedSeString = StripOurText(currentSeString, out _);
 
         PrevMask = currentMask;
 
         var currentProb = CalculateExactProbabilities(currentMask, stickers);
+
         var sb = new SeStringBuilder();
-        
         sb.Append(strippedSeString);
         sb.AddText("\n");
-
         sb.AddText(LocMarker);
         
         sb.AddText($"1{LocStrings.Line}: ");
@@ -217,9 +232,8 @@ public unsafe class WondrousTailsPredictor : ModuleBase
         sb.AddText($"3{LocStrings.Line}: ");
         FormatProb(sb, currentProb.Line3, GlobalShuffleExpectation[2]);
 
-        textNode->SetText(sb.Build().Encode());
-        IsOurTextAttached = true;
-        PrevTextPtr = (nint)textNode->NodeText.StringPtr.Value;
+        var encoded = sb.Build().Encode();
+        textNode->SetText(encoded);
     }
 
     private SeString StripOurText(SeString original, out bool hasOurText)
@@ -230,11 +244,12 @@ public unsafe class WondrousTailsPredictor : ModuleBase
         
         var markerIdx = -1;
         var textIdxWithinPayload = -1;
+        
         for (var i = 0; i < count; i++)
         {
-            if (payloads[i] is TextPayload tp && tp.Text != null)
+            if (payloads[i] is TextPayload tp2 && tp2.Text != null)
             {
-                var idx = tp.Text.IndexOf(marker, StringComparison.Ordinal);
+                var idx = tp2.Text.IndexOf(marker, StringComparison.Ordinal);
                 if (idx >= 0)
                 {
                     markerIdx = i;

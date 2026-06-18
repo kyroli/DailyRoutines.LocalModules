@@ -1800,6 +1800,7 @@ public unsafe partial class AutoRetainerWorkCustom
             private const           int        CACHE_EXPIRATION_MINUTES = 10;
             private static readonly PriceCache CurrentPriceCache        = new();
             private static readonly PriceCache HistoryPriceCache        = new();
+            private static readonly List<uint> EmptyPrices              = [];
 
             public static void UpdateCache<T>
             (
@@ -1914,7 +1915,7 @@ public unsafe partial class AutoRetainerWorkCustom
 
             public static bool TryGetPricesCache(uint itemID, bool isHQ, out List<uint> prices)
             {
-                prices = [];
+                prices = EmptyPrices;
                 var cacheKey         = CacheKeys.Create(itemID, isHQ);
                 var oppositeCacheKey = CacheKeys.Create(itemID, !isHQ);
 
@@ -1928,6 +1929,7 @@ public unsafe partial class AutoRetainerWorkCustom
                 if (HistoryPriceCache.TryGetPrices(cacheKey, out prices) && prices.Count > 0) return true;
                 if (HistoryPriceCache.TryGetPrices(oppositeCacheKey, out prices) && prices.Count > 0) return true;
 
+                prices = EmptyPrices;
                 return false;
             }
 
@@ -1950,6 +1952,7 @@ public unsafe partial class AutoRetainerWorkCustom
 
         public sealed class PriceCache
         {
+            private static readonly List<uint> EmptyPrices = [];
             private readonly Dictionary<string, CacheEntry> data = [];
 
             public DateTime LastUpdateTime { get; private set; } = DateTime.MinValue;
@@ -1984,7 +1987,7 @@ public unsafe partial class AutoRetainerWorkCustom
 
             public bool TryGetPrices(string key, out List<uint> prices)
             {
-                prices = [];
+                prices = EmptyPrices;
 
                 if (data.TryGetValue(key, out var entry))
                 {
@@ -3523,11 +3526,6 @@ public unsafe partial class AutoRetainerWorkCustom
             if (prices.Count == 1) return prices[0];
 
             var p1 = prices[0];
-            var modified1 = GetModifiedPrice(itemConfig, p1);
-
-            // 如果最低价改完后已经不低于最小值，无需倒查，直接使用 p1
-            if (modified1 >= itemConfig.PriceMinimum)
-                return p1;
 
             // 触发了低于最小值，开始倒查
             if (prices.Count >= 2)
@@ -3569,9 +3567,16 @@ public unsafe partial class AutoRetainerWorkCustom
             var itemConfig = GetItemConfigByItemKey(itemMarketData.Value.Item);
 
             var finalMarketPrice = marketPrice;
-            if (forcePrice == 0 && PriceCacheManager.TryGetPricesCache(itemMarketData.Value.Item.itemID, itemMarketData.Value.Item.IsHQ, out var prices))
+            if (forcePrice == 0)
             {
-                finalMarketPrice = GetFinalMarketPrice(itemConfig, prices);
+                // 快速通道：若最低价改完后依旧在安全范围内，则直接短路，省去倒查和读取缓存的开销
+                if (GetModifiedPrice(itemConfig, marketPrice) < itemConfig.PriceMinimum)
+                {
+                    if (PriceCacheManager.TryGetPricesCache(itemMarketData.Value.Item.itemID, itemMarketData.Value.Item.IsHQ, out var prices))
+                    {
+                        finalMarketPrice = GetFinalMarketPrice(itemConfig, prices);
+                    }
+                }
             }
 
             if (finalMarketPrice != marketPrice)
