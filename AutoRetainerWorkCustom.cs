@@ -3616,7 +3616,7 @@ public unsafe partial class AutoRetainerWorkCustom
                     out var abortBehavior
                 ))
             {
-                NotifyAbortCondition(itemMarketData.Value.Item.itemID, itemMarketData.Value.Item.IsHQ, abortCondition);
+                NotifyAbortCondition(itemMarketData.Value.Item.itemID, itemMarketData.Value.Item.IsHQ, abortCondition, finalMarketPrice);
                 EnqueueAbortBehavior(abortBehavior);
                 return;
             }
@@ -3967,21 +3967,27 @@ public unsafe partial class AutoRetainerWorkCustom
         /// <summary>
         ///     发送意外情况检测通知信息
         /// </summary>
-        private void NotifyAbortCondition(uint itemID, bool isHQ, AbortCondition condition)
+        private void NotifyAbortCondition(uint itemID, bool isHQ, AbortCondition condition, uint marketPrice)
         {
             if (!ParentModule.config.SendPriceAdjustProcessMessage) return;
 
             var itemPayload = new SeStringBuilder().AddItemLink(itemID, isHQ).Build();
-            NotifyHelper.Instance().Chat
+            var baseMessage = DailyRoutines.Manager.LanguageManager.GetSe
             (
-                DailyRoutines.Manager.LanguageManager.GetSe
-                (
-                    "AutoRetainerWork-PriceAdjust-DetectAbortCondition",
-                    itemPayload,
-                    RetainerManager.Instance()->GetActiveRetainer()->NameString,
-                    new SeStringBuilder().AddUiForeground(GetLoc(condition), 60).Build()
-                )
+                "AutoRetainerWork-PriceAdjust-DetectAbortCondition",
+                itemPayload,
+                RetainerManager.Instance()->GetActiveRetainer()->NameString,
+                new SeStringBuilder().AddUiForeground(GetLoc(condition), 60).Build()
             );
+
+            using var rented = new RentedSeStringBuilder();
+            rented.Builder.Append(baseMessage);
+            if (IsCN)
+                rented.Builder.Append($" [当前市场最低价: {marketPrice.ToChineseString()}]");
+            else
+                rented.Builder.Append($" [Current Market Min Price: {marketPrice.ToChineseString()}]");
+
+            NotifyHelper.Instance().Chat(rented.Builder.ToReadOnlySeString());
         }
 
         /// <summary>

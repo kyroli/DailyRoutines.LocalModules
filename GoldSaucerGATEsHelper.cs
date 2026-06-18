@@ -52,10 +52,6 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
     private const uint GimmickDoubleRect = 2010778;
     private const uint GimmickCircle = 2010779;
 
-    private const uint HelperSingleRectOID = 0x1EAE99;
-    private const uint HelperDoubleRectOID = 0x1EAE9A;
-    private const uint HelperCircleOID = 0x1EAE9B;
-
     private readonly Dictionary<ulong, DateTime> objectSpawnTimes = [];
     
     // --- 缓存数据 ---
@@ -94,29 +90,23 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
         return now >= visibleFrom && now < visibleUntil;
     }
 
-    private static unsafe bool TryGetSliceHelperType(OmenTools.Dalamud.Services.ObjectTable.Abstractions.ObjectKinds.IGameObject gameObject, out uint helperType)
+    private static bool IsTelegraphExpired(DateTime firstSeen) =>
+        DateTime.Now >= firstSeen.AddSeconds(TelegraphDelaySeconds + TelegraphDurationSeconds);
+
+    private static bool TryGetSliceHelperType(OmenTools.Dalamud.Services.ObjectTable.Abstractions.ObjectKinds.IGameObject gameObject, out uint helperType)
     {
         helperType = 0;
         if (!gameObject.IsValid()) return false;
         
         if (gameObject.ObjectKind == ObjectKind.EventObj)
         {
-            var gimmickId = ((FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject*)gameObject.Address)->GimmickId;
-            if (gimmickId is >= GimmickSingleRect and <= GimmickCircle)
+            if (gameObject.DataID is >= GimmickSingleRect and <= GimmickCircle)
             {
-                helperType = gimmickId;
+                helperType = gameObject.DataID;
                 return true;
             }
         }
-
-        helperType = gameObject.DataID switch
-        {
-            HelperSingleRectOID => GimmickSingleRect,
-            HelperDoubleRectOID => GimmickDoubleRect,
-            HelperCircleOID => GimmickCircle,
-            _ => 0
-        };
-        return helperType != 0;
+        return false;
     }
 
     protected override void Init()
@@ -248,7 +238,7 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
                     break;
                 }
             }
-            if (!found || !IsTelegraphVisible(firstSeen)) toRemoveList.Add(id);
+            if (!found || IsTelegraphExpired(firstSeen)) toRemoveList.Add(id);
         }
 
         for (var i = 0; i < toRemoveList.Count; i++)
