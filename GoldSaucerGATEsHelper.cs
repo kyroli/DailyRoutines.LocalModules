@@ -445,12 +445,12 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
                         {
                             var radius = Vector2.Distance(bombScreen, bombTopScreen);
                             var dist = Vector3.Distance(player.Position, x.Position);
-                            bombScreenPositions.Add((bombScreen, radius + 5f, dist));
+                            bombScreenPositions.Add((bombScreen, radius + 8f, dist));
                         }
                         else
                         {
                             var dist = Vector3.Distance(player.Position, x.Position);
-                            bombScreenPositions.Add((bombScreen, 30f, dist));
+                            bombScreenPositions.Add((bombScreen, 32f, dist));
                         }
                     }
                 }
@@ -521,7 +521,7 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
     {
         foreach (var bomb in bombScreenPositions)
         {
-            if (bomb.Dist < targetDist || bomb.Dist - targetDist < 5.0f)
+            if (bomb.Dist < targetDist || bomb.Dist - targetDist < 15.0f)
             {
                 var dx = targetScreen.X - bomb.Pos.X;
                 var dy = targetScreen.Y - bomb.Pos.Y;

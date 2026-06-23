@@ -38,6 +38,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using KamiToolKit.BaseTypes;
 using KamiToolKit.Classes;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
@@ -998,7 +999,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                 IsVisible      = true,
                 Size           = new(width, 28f),
                 AlignmentFlags = FlexFlags.FitContentHeight | FlexFlags.FitWidth,
-                FitPadding     = 4f
+                ItemSpacing    = 4
             };
             row.AddNode
             (
