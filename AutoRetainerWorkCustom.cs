@@ -18,6 +18,7 @@ using static OmenTools.Global.Globals;
 using Action = System.Action;
 using DailyRoutines.Common.Extensions;
 using DailyRoutines.Common.KamiToolKit.Addons;
+using DailyRoutines.Common.KamiToolKit.Nodes;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
