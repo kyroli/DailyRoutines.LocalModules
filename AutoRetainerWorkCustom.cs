@@ -1829,7 +1829,7 @@ public unsafe partial class AutoRetainerWorkCustom
                     var enumerable = items as T[] ?? items.ToArray();
                     if (enumerable.Length == 0) continue;
 
-                    var sortedPrices = enumerable.Select(priceSelector).Where(p => p > 0).OrderBy(p => p).Take(3).ToList();
+                    var sortedPrices = enumerable.Select(priceSelector).Where(p => p > 0).OrderBy(p => p).Take(5).ToList();
                     if (sortedPrices.Count == 0) continue;
 
                     var cacheKey = CacheKeys.Create(itemID, isHQ);
@@ -1858,7 +1858,7 @@ public unsafe partial class AutoRetainerWorkCustom
                     var enumerable = items as T[] ?? items.ToArray();
                     if (enumerable.Length == 0) continue;
 
-                    var sortedPrices = enumerable.Select(priceSelector).Where(p => p > 0).OrderBy(p => p).Take(3).ToList();
+                    var sortedPrices = enumerable.Select(priceSelector).Where(p => p > 0).OrderBy(p => p).Take(5).ToList();
                     if (sortedPrices.Count == 0) continue;
 
                     var cacheKey = CacheKeys.Create(itemID, isHQ);
@@ -3527,35 +3527,18 @@ public unsafe partial class AutoRetainerWorkCustom
             if (prices == null || prices.Count == 0) return 0;
             if (prices.Count == 1) return prices[0];
 
-            var p1 = prices[0];
-
-            // 触发了低于最小值，开始倒查
-            if (prices.Count >= 2)
+            var skippedCount = 0;
+            foreach (var price in prices)
             {
-                var p2 = prices[1];
-                var modified2 = GetModifiedPrice(itemConfig, p2);
+                if (GetModifiedPrice(itemConfig, price) >= itemConfig.PriceMinimum)
+                    return price;
 
-                // 判定 p1 是否是意外低价（低于 p2 的 50% 且 p2 改价后正常）
-                if (p1 * 2 < p2 && modified2 >= itemConfig.PriceMinimum)
-                {
-                    // 确认 p1 是意外低价。如果还有 p3，递归检查 p2 是否相对于 p3 也是意外低价
-                    if (prices.Count >= 3)
-                    {
-                        var p3 = prices[2];
-                        var modified3 = GetModifiedPrice(itemConfig, p3);
-
-                        if (p2 * 2 < p3 && modified3 >= itemConfig.PriceMinimum)
-                        {
-                            // p2 也是意外低价，使用 p3
-                            return p3;
-                        }
-                    }
-                    // 否则使用 p2
-                    return p2;
-                }
+                skippedCount++;
+                if (skippedCount > 2)
+                    break;
             }
 
-            return p1;
+            return prices[0];
         }
 
         private void EnqueuePriceAdjustSingleItem(ushort slot, uint marketPrice, uint forcePrice = 0)
