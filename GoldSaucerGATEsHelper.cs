@@ -214,7 +214,7 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
         var pos = player.Position;
 
         var distSq  = Vector3.DistanceSquared(pos, SafeSpot);
-        var onSpot  = distSq < 0.00025f * 0.00025f;
+        var onSpot  = distSq < 0.25f * 0.25f;
         var colour  = onSpot ? ColourWindGreen : ColourWindRed;
 
         if (!DService.Instance().GameGUI.WorldToScreen(SafeSpot, out var screenPos)) return;
@@ -436,7 +436,7 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
 
             if (dataID is 2015183 or 2009679)
             {
-                if (eventObj->SharedTimelineState != 4)
+                if (eventObj->SharedTimelineState == 1)
                 {
                     if (gameGUI.WorldToScreen(x.Position, out var bombScreen))
                     {
@@ -482,7 +482,7 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
         {
             if (!gameGUI.WorldToScreen(obj.Position, out var targetScreen)) continue;
 
-            if (IsNearBombOnScreen(targetScreen, dist, bombScreenPositions))
+            if (IsNearBombOnScreen(targetScreen, bombScreenPositions))
             {
                 if (Throttler.Shared.Throttle($"SkipLog-{obj.GameObjectID}", 1000))
                 {
@@ -509,25 +509,45 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
                 
                 DService.Instance().Log.Information($"[GoldSaucerGATEsHelper] SHOOT: {bestTarget.Name} (ID={bestTarget.DataID}, ObjID={bestTarget.GameObjectID:X}) Pos={bestTarget.Position} Screen={bestScreen} Dist={bestDist:F1}y Bombs={bombScreenPositions.Count} Candidates={candidates.Count}");
 
-                DService.Instance().Framework.RunOnTick(() =>
+                var shotFired = false;
+                var mountID = player.CurrentMount?.RowId ?? 0;
+                if (mountID > 0 && OmenTools.Interop.Game.Lumina.LuminaGetter.TryGetRow<Lumina.Excel.Sheets.Mount>(mountID, out var mountData))
                 {
-                    KeyEmulationHelper.SendKeypress(Keys.Space);
-                }, delayTicks: 1);
+                    var actionID = mountData.MountAction.ValueNullable?.Action[0].RowId ?? 0;
+                    if (actionID > 0)
+                    {
+                        DService.Instance().Framework.RunOnTick(() =>
+                        {
+                            FFXIVClientStructs.FFXIV.Client.Game.ActionManager.Instance()->UseAction(FFXIVClientStructs.FFXIV.Client.Game.ActionType.Action, actionID);
+                        }, delayTicks: 1);
+                        shotFired = true;
+                    }
+                }
+
+                if (!shotFired)
+                {
+                    var stage = AtkStage.Instance();
+                    var isTyping = (stage != null && stage->AtkInputManager != null && stage->AtkInputManager->FocusedNode != null) || ImGui.GetIO().WantCaptureKeyboard;
+                    if (!isTyping)
+                    {
+                        DService.Instance().Framework.RunOnTick(() =>
+                        {
+                            KeyEmulationHelper.SendKeypress(Keys.Space);
+                        }, delayTicks: 1);
+                    }
+                }
             }
         }
     }
 
-    private static bool IsNearBombOnScreen(Vector2 targetScreen, float targetDist, List<(Vector2 Pos, float Radius, float Dist)> bombScreenPositions)
+    private static bool IsNearBombOnScreen(Vector2 targetScreen, List<(Vector2 Pos, float Radius, float Dist)> bombScreenPositions)
     {
         foreach (var bomb in bombScreenPositions)
         {
-            if (bomb.Dist < targetDist || bomb.Dist - targetDist < 15.0f)
-            {
-                var dx = targetScreen.X - bomb.Pos.X;
-                var dy = targetScreen.Y - bomb.Pos.Y;
-                if (dx * dx + dy * dy < bomb.Radius * bomb.Radius)
-                    return true;
-            }
+            var dx = targetScreen.X - bomb.Pos.X;
+            var dy = targetScreen.Y - bomb.Pos.Y;
+            if (dx * dx + dy * dy < bomb.Radius * bomb.Radius)
+                return true;
         }
 
         return false;

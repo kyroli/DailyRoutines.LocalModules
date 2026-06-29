@@ -7,6 +7,7 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -78,15 +79,8 @@ public unsafe class AutoTripleTriad : ModuleBase
         private MethodInfo? gameNPCDBGetMethod;
         private FieldInfo? gameNPCDBMapNPCsField;
 
-        private MethodInfo? gameCardDBGetMethod;
-        private MethodInfo? gameCardDBRefreshMethod;
-        private MethodInfo? gameCardDBFindByIDMethod;
-
         private FieldInfo? triadNPCIDField;
         private FieldInfo? gameNPCInfoRewardCardsField;
-
-        private FieldInfo? gameCardInfoIsOwnedField;
-        private FieldInfo? gameCardInfoItemIDField;
 
         private bool isTriadUIActive = false;
         private bool wasPrepOpen = false;
@@ -96,8 +90,8 @@ public unsafe class AutoTripleTriad : ModuleBase
         private long lastNPCCheckTime = 0;
         private int cachedNPCID = -1;
         private bool isExitingFromCompletion = false;
-        private List<(string Name, bool IsOwned, uint ItemID)> npcDropsCache = new();
-        private HashSet<uint> sessionDroppedItemIDs = new();
+        private List<(string Name, bool IsOwned, ushort CardID)> npcDropsCache = new();
+        private HashSet<ushort> sessionDroppedCardIDs = new();
 
         protected override void ConfigUI()
         {
@@ -166,7 +160,7 @@ public unsafe class AutoTripleTriad : ModuleBase
                 ImGui.Indent();
                 foreach (var drop in npcDropsCache)
                 {
-                    bool isOwned = drop.IsOwned || sessionDroppedItemIDs.Contains(drop.ItemID);
+                    bool isOwned = drop.IsOwned || sessionDroppedCardIDs.Contains(drop.CardID);
                     string symbol = isOwned ? "[√]" : "[  ]";
                     ImGui.Text($"{symbol} {drop.Name}");
                 }
@@ -218,7 +212,7 @@ public unsafe class AutoTripleTriad : ModuleBase
             cachedNPCID = -1;
             lastNPCCheckTime = 0;
             isExitingFromCompletion = false;
-            sessionDroppedItemIDs.Clear();
+            sessionDroppedCardIDs.Clear();
 
             config.EnableTripleTriad = false;
             SaveConfig(config);
@@ -238,15 +232,8 @@ public unsafe class AutoTripleTriad : ModuleBase
             gameNPCDBGetMethod = null;
             gameNPCDBMapNPCsField = null;
 
-            gameCardDBGetMethod = null;
-            gameCardDBRefreshMethod = null;
-            gameCardDBFindByIDMethod = null;
-
             triadNPCIDField = null;
             gameNPCInfoRewardCardsField = null;
-
-            gameCardInfoIsOwnedField = null;
-            gameCardInfoItemIDField = null;
 
             solverGameStaticField = null;
             solverPreGameDecksStaticField = null;
@@ -276,12 +263,10 @@ public unsafe class AutoTripleTriad : ModuleBase
 
                 if (solverGameType == null || solverPreGameDecksType == null) return false;
 
-                var gameCardDBType = assembly.GetType("TriadBuddyPlugin.GameCardDB");
                 var gameNpcDBType = assembly.GetType("TriadBuddyPlugin.GameNpcDB");
                 var gameNpcInfoType = assembly.GetType("TriadBuddyPlugin.GameNpcInfo");
-                var gameCardInfoType = assembly.GetType("TriadBuddyPlugin.GameCardInfo");
 
-                if (gameCardDBType == null || gameNpcDBType == null || gameNpcInfoType == null || gameCardInfoType == null) return false;
+                if (gameNpcDBType == null || gameNpcInfoType == null) return false;
 
                 const BindingFlags instanceFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.IgnoreCase;
                 const BindingFlags staticFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.IgnoreCase;
@@ -303,29 +288,19 @@ public unsafe class AutoTripleTriad : ModuleBase
                 gameNPCDBGetMethod = gameNpcDBType.GetMethod("Get", staticFlags);
                 gameNPCDBMapNPCsField = gameNpcDBType.GetField("mapNpcs", instanceFlags);
 
-                // GameCardDB methods
-                gameCardDBGetMethod = gameCardDBType.GetMethod("Get", staticFlags);
-                gameCardDBRefreshMethod = gameCardDBType.GetMethod("Refresh", instanceFlags);
-                gameCardDBFindByIDMethod = gameCardDBType.GetMethod("FindById", instanceFlags);
-
                 // GameNpcInfo / NPC fields
                 var triadNpcType = assembly.GetType("FFTriadBuddy.TriadNpc");
                 if (triadNpcType == null) return false;
                 triadNPCIDField = triadNpcType.GetField("Id", instanceFlags);
                 gameNPCInfoRewardCardsField = gameNpcInfoType.GetField("rewardCards", instanceFlags);
 
-                // GameCardInfo fields
-                gameCardInfoIsOwnedField = gameCardInfoType.GetField("IsOwned", instanceFlags);
-                gameCardInfoItemIDField = gameCardInfoType.GetField("ItemId", instanceFlags);
-
                 // 核心反射字段必须全部获取成功
                 if (solverGameCurrentNPCField == null || solverGameHasErrorsProp == null || solverGameHasMoveField == null ||
                     solverGameMoveCardIdxField == null || solverGameMoveBoardIdxField == null ||
                     solverPreGameNPCField == null || solverPreGameProgressProp == null || solverPreGameBestIDField == null ||
                     gameNPCDBGetMethod == null || gameNPCDBMapNPCsField == null ||
-                    gameCardDBGetMethod == null || gameCardDBRefreshMethod == null || gameCardDBFindByIDMethod == null ||
                     triadNPCIDField == null ||
-                    gameNPCInfoRewardCardsField == null || gameCardInfoIsOwnedField == null || gameCardInfoItemIDField == null)
+                    gameNPCInfoRewardCardsField == null)
                 {
                     DService.Instance().Log.Warning("AutoTripleTriad: 反射获取 TriadBuddy 核心字段失败，已触发熔断拦截。");
                     return false;
@@ -403,7 +378,7 @@ public unsafe class AutoTripleTriad : ModuleBase
                 {
                     config.EnableTripleTriad = true;
                     matchCount = 0;
-                    sessionDroppedItemIDs.Clear();
+                    sessionDroppedCardIDs.Clear();
                     SaveConfig(config);
                 }
                 lastPrepCloseTime = 0;
@@ -514,59 +489,67 @@ public unsafe class AutoTripleTriad : ModuleBase
                 if (Environment.TickCount64 - lastResultActionTime < 1000) return;
                 lastResultActionTime = Environment.TickCount64;
 
+                // 追踪本场掉落的卡牌 cardID（通过 Agent 获取奖励物品 ID，再映射到 cardID）
                 nint agentPtr = DService.Instance().GameGUI.FindAgentInterface((nint)addonResult);
                 if (agentPtr != nint.Zero)
                 {
                     var agent = (AgentTripleTriad*)agentPtr;
                     if (agent->rewardItemID > 0)
                     {
-                        sessionDroppedItemIDs.Add(agent->rewardItemID);
+                        // 通过 Lumina 查 Item 表将 ItemID 映射到 CardID
+                        var itemSheet = DService.Instance().Data.GetExcelSheet<Item>();
+                        var itemRow = itemSheet?.GetRowOrDefault(agent->rewardItemID);
+                        if (itemRow != null)
+                        {
+                            var cardId = itemRow.Value.AdditionalData.RowId;
+                            if (cardId > 0)
+                            {
+                                sessionDroppedCardIDs.Add((ushort)cardId);
+                            }
+                        }
                     }
                 }
 
                 bool shouldStop = false;
 
-                var externalSolverGame = solverGameStaticField?.GetValue(null);
-                if (config.PlayUntilAllUnownedCardsDrop && externalSolverGame != null)
+                if (config.PlayUntilAllUnownedCardsDrop)
                 {
                     try
                     {
-                        object? currentNPC = solverGameCurrentNPCField!.GetValue(externalSolverGame);
-                        if (currentNPC != null)
+                        var externalSolverGame = solverGameStaticField?.GetValue(null);
+                        if (externalSolverGame != null)
                         {
-                            var idVal = triadNPCIDField!.GetValue(currentNPC);
-                            if (idVal == null) return;
-                            int NPCID = (int)idVal;
-                            
-                            object npcDBInstance = gameNPCDBGetMethod!.Invoke(null, null)!;
-                            if (npcDBInstance == null) return;
-                            object mapNPCs = gameNPCDBMapNPCsField!.GetValue(npcDBInstance)!;
-                            if (mapNPCs == null) return;
-                            
-                            if (mapNPCs is System.Collections.IDictionary dict)
+                            object? currentNPC = solverGameCurrentNPCField!.GetValue(externalSolverGame);
+                            if (currentNPC != null)
                             {
-                                if (dict.Contains(NPCID))
+                                var idVal = triadNPCIDField!.GetValue(currentNPC);
+                                if (idVal == null) return;
+                                int NPCID = (int)idVal;
+                                
+                                object npcDBInstance = gameNPCDBGetMethod!.Invoke(null, null)!;
+                                if (npcDBInstance == null) return;
+                                object mapNPCs = gameNPCDBMapNPCsField!.GetValue(npcDBInstance)!;
+                                if (mapNPCs == null) return;
+                                
+                                if (mapNPCs is System.Collections.IDictionary dict)
                                 {
-                                    object? npcInfo = dict[NPCID];
-                                    if (npcInfo == null) return;
-
-                                    var rewardCards = (System.Collections.IEnumerable)gameNPCInfoRewardCardsField!.GetValue(npcInfo)!;
-                                    if (rewardCards == null) return;
-                                    
-                                    object cardDBInstance = gameCardDBGetMethod!.Invoke(null, null)!;
-                                    if (cardDBInstance == null) return;
-                                    gameCardDBRefreshMethod!.Invoke(cardDBInstance, null);
-                                    
-                                    bool allCardsOwned = true;
-                                    foreach (int cardID in rewardCards)
+                                    if (dict.Contains(NPCID))
                                     {
-                                        object? cardInfo = gameCardDBFindByIDMethod!.Invoke(cardDBInstance, new object[] { cardID });
-                                        if (cardInfo != null)
+                                        object? npcInfo = dict[NPCID];
+                                        if (npcInfo == null) return;
+
+                                        var rewardCards = (System.Collections.IEnumerable)gameNPCInfoRewardCardsField!.GetValue(npcInfo)!;
+                                        if (rewardCards == null) return;
+                                        
+                                        // 使用 UIState 内存直读判断卡牌拥有状态，替代反射 GameCardDB
+                                        var uiState = UIState.Instance();
+                                        if (uiState == null) return;
+                                        
+                                        bool allCardsOwned = true;
+                                        foreach (int cardID in rewardCards)
                                         {
-                                            bool isOwned = (bool)gameCardInfoIsOwnedField!.GetValue(cardInfo)!;
-                                            uint ItemID = (uint)gameCardInfoItemIDField!.GetValue(cardInfo)!;
-                                            
-                                            if (sessionDroppedItemIDs.Contains(ItemID)) isOwned = true;
+                                            bool isOwned = uiState->IsTripleTriadCardUnlocked((ushort)cardID)
+                                                           || sessionDroppedCardIDs.Contains((ushort)cardID);
                                             
                                             if (!isOwned)
                                             {
@@ -574,12 +557,12 @@ public unsafe class AutoTripleTriad : ModuleBase
                                                 break;
                                             }
                                         }
-                                    }
-                                    
-                                    if (allCardsOwned)
-                                    {
-                                        DService.Instance().Chat.Print(GetLoc("DoneCol"));
-                                        shouldStop = true;
+                                        
+                                        if (allCardsOwned)
+                                        {
+                                            DService.Instance().Chat.Print(GetLoc("DoneCol"));
+                                            shouldStop = true;
+                                        }
                                     }
                                 }
                             }
@@ -663,22 +646,13 @@ public unsafe class AutoTripleTriad : ModuleBase
                             var rewardCards = (System.Collections.IEnumerable)gameNPCInfoRewardCardsField!.GetValue(npcInfo)!;
                             if (rewardCards == null) return;
                             
-                            object cardDBInstance = gameCardDBGetMethod!.Invoke(null, null)!;
-                            if (cardDBInstance == null) return;
-                            gameCardDBRefreshMethod!.Invoke(cardDBInstance, []);
-                            
+                            // 使用 UIState 内存直读判断卡牌拥有状态
+                            var uiState = UIState.Instance();
                             var sheet = DService.Instance().Data.GetExcelSheet<TripleTriadCard>();
                             
                             foreach (int cardID in rewardCards)
                             {
-                                object? cardInfo = gameCardDBFindByIDMethod!.Invoke(cardDBInstance, [cardID]);
-                                bool isOwned = false;
-                                uint ItemID = 0;
-                                if (cardInfo != null)
-                                {
-                                    isOwned = (bool)gameCardInfoIsOwnedField!.GetValue(cardInfo)!;
-                                    ItemID = (uint)gameCardInfoItemIDField!.GetValue(cardInfo)!;
-                                }
+                                bool isOwned = uiState != null && uiState->IsTripleTriadCardUnlocked((ushort)cardID);
                                 
                                 string cardName = $"Card #{cardID}";
                                 try
@@ -692,7 +666,7 @@ public unsafe class AutoTripleTriad : ModuleBase
                                     // 忽略 Lumina 解析异常，防止空指针阻断流程
                                 }
                                 
-                                npcDropsCache.Add((cardName, isOwned, ItemID));
+                                npcDropsCache.Add((cardName, isOwned, (ushort)cardID));
                             }
                         }
                     }
