@@ -19,6 +19,7 @@ using Action = System.Action;
 using DailyRoutines.Common.Extensions;
 using DailyRoutines.Common.KamiToolKit.Addons;
 using DailyRoutines.Common.KamiToolKit.Nodes;
+using Lang = DailyRoutines.Manager.LanguageManager;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -310,7 +311,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                         () =>
                         {
                             if (TaskHelper.AbortByConflictKey(ParentModule)) return true;
-                            return AddonSelectStringEvent.Select(["金币管理", "金幣管理", "Entrust or withdraw gil", "ギルの受け渡し"]);
+                            return AddonSelectStringEvent.Select(["金币管理", "金幣管理", "Entrust or withdraw gil", "ギルの受け渡し", "길 주고받기"]);
                         },
                         IsCN ? "选择进入金币管理" : "Select Gil Management"                    );
                     TaskHelper.Enqueue
@@ -353,6 +354,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
     ) : RetainerWorkerBase(module)
     {
         private TaskHelper? taskHelper;
+        private const uint MAX_PLAYER_GIL = 999_999_999U;
 
         public override bool DrawConfigCondition() => false;
 
@@ -367,74 +369,30 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
             taskHelper = null;
         }
 
-        public override TreeListCategoryNode CreateOverlayCategory(float width)
-        {
-            CheckboxNode? methodOneNode   = null;
-            CheckboxNode? methodTwoNode   = null;
-            var           methodNodeWidth = width / 2f;
-
-            methodOneNode = CreateOverlayCheckbox
+        public override TreeListCategoryNode CreateOverlayCategory(float width) =>
+            CreateOverlayCategory
             (
-                $"{DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("Method")} 1",
-                ParentModule.config.GilsShareMethod == 0,
-                isChecked =>
-                {
-                    if (!isChecked)
-                    {
-                        methodOneNode!.IsChecked = true;
-                        return;
-                    }
-
-                    ParentModule.config.GilsShareMethod = 0;
-                    ParentModule.config.Save(ParentModule);
-                    methodTwoNode!.IsChecked = false;
-                },
-                methodNodeWidth,
-                DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-GilsShare-MethodsHelp")
-            );
-
-            methodTwoNode = CreateOverlayCheckbox
-            (
-                $"{DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("Method")} 2",
-                ParentModule.config.GilsShareMethod == 1,
-                isChecked =>
-                {
-                    if (!isChecked)
-                    {
-                        methodTwoNode!.IsChecked = true;
-                        return;
-                    }
-
-                    ParentModule.config.GilsShareMethod = 1;
-                    ParentModule.config.Save(ParentModule);
-                    methodOneNode!.IsChecked = false;
-                },
-                methodNodeWidth,
-                DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-GilsShare-MethodsHelp")
-            );
-
-            var methodRow = new HorizontalListNode
-            {
-                IsVisible          = true,
-                Size               = new(width, 24f),
-                ItemSpacing        = 4f,
-                FitToContentHeight = true
-            };
-            methodRow.AddNode([methodOneNode, methodTwoNode]);
-
-            return CreateOverlayCategory
-            (
-                DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-GilsShare-Title"),
+                Lang.Get("AutoRetainerWork-GilsShare-Title"),
                 width,
-                methodRow,
                 CreateOverlayButtonRow(EnqueueRetainersGilShare, () => taskHelper?.Abort(), width)
             );
-        }
 
         private void EnqueueRetainersGilShare()
         {
             if (taskHelper.AbortByConflictKey(ParentModule)) return;
             if (ParentModule.IsAnyOtherWorkerBusy(typeof(GilsShareWorker))) return;
+
+            var playerGil = (uint)LocalPlayerState.GetItemCount(1);
+
+            if (playerGil >= MAX_PLAYER_GIL)
+            {
+                NotifyHelper.Instance().NotificationWarning
+                (
+                    Lang.Get("AutoRetainerWork-GilsShare-PlayerGilFull"),
+                    ParentModule.Info.Title
+                );
+                return;
+            }
 
             var retainerManager = RetainerManager.Instance();
             var retainerCount   = retainerManager->GetRetainerCount();
@@ -444,27 +402,112 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                 totalGilAmount += retainerManager->GetRetainerBySortedIndex(i)->Gil;
 
             var avgAmount = (uint)Math.Floor(totalGilAmount / (double)retainerCount);
-            if (avgAmount <= 1) return;
 
-            switch (ParentModule.config.GilsShareMethod)
+            if (avgAmount <= 1)
             {
-                case 0:
-                    for (var i = 0U; i < retainerCount; i++)
-                        EnqueueRetainersGilShareMethodFirst(i, avgAmount);
-
-                    break;
-                case 1:
-                    for (var i = 0U; i < retainerCount; i++)
-                        EnqueueRetainersGilShareMethodSecond(i);
-
-                    for (var i = 0U; i < retainerCount; i++)
-                        EnqueueRetainersGilShareMethodFirst(i, avgAmount);
-
-                    break;
+                NotifyHelper.Instance().NotificationInfo
+                (
+                    Lang.Get("AutoRetainerWork-GilsShare-NoNeedToShare"),
+                    ParentModule.Info.Title
+                );
+                return;
             }
+
+            // 按金币盈余 / 不足分组
+            var richRetainers = new List<(uint Index, uint Excess)>();
+            var poorRetainers = new List<(uint Index, uint Deficit)>();
+
+            for (var i = 0U; i < retainerCount; i++)
+            {
+                var gil = retainerManager->GetRetainerBySortedIndex(i)->Gil;
+                if (gil > avgAmount)
+                    richRetainers.Add((i, gil - avgAmount));
+                else if (gil < avgAmount)
+                    poorRetainers.Add((i, avgAmount - gil));
+            }
+
+            if (richRetainers.Count == 0)
+            {
+                NotifyHelper.Instance().NotificationInfo
+                (
+                    Lang.Get("AutoRetainerWork-GilsShare-NoNeedToShare"),
+                    ParentModule.Info.Title
+                );
+                return;
+            }
+
+            // 规划操作序列, 交替存取以避免玩家金币溢出
+            var operations     = new List<(uint Index, uint Amount, bool IsWithdraw)>();
+            var richIdx        = 0;
+            var poorIdx        = 0;
+            var pendingExcess  = richRetainers[0].Excess;
+            var pendingDeficit = poorRetainers.Count > 0 ? poorRetainers[0].Deficit : 0U;
+
+            while (richIdx < richRetainers.Count || poorIdx < poorRetainers.Count)
+            {
+                var madeProgress = false;
+
+                // 先向金币不足 hometown 存入金币, 降低玩家持有量以腾出取出空间
+                while (poorIdx < poorRetainers.Count && playerGil > 0 && pendingDeficit > 0)
+                {
+                    var amount = Math.Min(playerGil, pendingDeficit);
+                    operations.Add((poorRetainers[poorIdx].Index, amount, false));
+                    playerGil      -= amount;
+                    pendingDeficit -= amount;
+                    madeProgress   =  true;
+
+                    if (pendingDeficit == 0)
+                    {
+                        poorIdx++;
+                        if (poorIdx < poorRetainers.Count)
+                            pendingDeficit = poorRetainers[poorIdx].Deficit;
+                    }
+                }
+
+                // 再从金币盈余的雇员取出金币
+                if (richIdx < richRetainers.Count && pendingExcess > 0)
+                {
+                    var maxCanHold = MAX_PLAYER_GIL - playerGil;
+
+                    if (maxCanHold > 0)
+                    {
+                        var amount = Math.Min(pendingExcess, maxCanHold);
+                        operations.Add((richRetainers[richIdx].Index, amount, true));
+                        playerGil     += amount;
+                        pendingExcess -= amount;
+                        madeProgress  =  true;
+
+                        if (pendingExcess == 0)
+                        {
+                            richIdx++;
+                            if (richIdx < richRetainers.Count)
+                                pendingExcess = richRetainers[richIdx].Excess;
+                        }
+                    }
+                }
+
+                if (!madeProgress) break;
+            }
+
+            foreach (var (index, amount, isWithdraw) in operations)
+                EnqueueRetainerGilOperation(index, amount, isWithdraw);
+
+            taskHelper.Enqueue
+            (
+                () =>
+                {
+                    NotifyHelper.Instance().NotificationSuccess
+                    (
+                        Lang.Get("AutoRetainerWork-GilsShare-Complete"),
+                        ParentModule.Info.Title
+                    );
+                    return true;
+                },
+                "发送完成通知"
+            );
         }
 
-        private void EnqueueRetainersGilShareMethodFirst(uint index, uint avgAmount)
+        private void EnqueueRetainerGilOperation(uint index, uint amount, bool isWithdraw)
         {
             taskHelper.Enqueue
             (
@@ -480,9 +523,10 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                 () =>
                 {
                     if (taskHelper.AbortByConflictKey(ParentModule)) return true;
-                    return AddonSelectStringEvent.Select(["金币管理", "金幣管理", "Entrust or withdraw gil", "ギルの受け渡し"]);
+                    return AddonSelectStringEvent.Select(["金币管理", "金幣管理", "Entrust or withdraw gil", "ギルの受け渡し", "길 주고받기"]);
                 },
-                IsCN ? "选择进入金币管理" : "Select Gil Management"            );
+                "选择进入金币管理"
+            );
             taskHelper.Enqueue
             (
                 () =>
@@ -490,85 +534,16 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                     if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                     if (!Bank->IsAddonAndNodesReady()) return false;
 
-                    var gils = AddonBankEvent.RetainerGilAmount;
-                    if (gils < 0 || gils == avgAmount) // 金币恰好相等
-                    {
-                        AddonBankEvent.ClickCancel();
-                        Bank->Close(true);
-                        return true;
-                    }
+                    if (!isWithdraw)
+                        AddonBankEvent.SwitchMode();
 
-                    if (gils > avgAmount) // 雇员金币多于平均值
-                    {
-                        AddonBankEvent.SetNumber((uint)(gils - avgAmount));
-                        AddonBankEvent.ClickConfirm();
-                        Bank->Close(true);
-                        return true;
-                    }
-
-                    // 雇员金币少于平均值
-                    AddonBankEvent.SwitchMode();
-                    AddonBankEvent.SetNumber((uint)(avgAmount - gils));
+                    AddonBankEvent.SetNumber(amount);
                     AddonBankEvent.ClickConfirm();
                     Bank->Close(true);
                     return true;
                 },
-                IsCN ? $"使用 1 号方法均分 {index} 号雇员的金币" : $"Share Gil evenly for retainer {index} using Method 1"
+                $"{(isWithdraw ? "取出" : "存入")} {amount} 金币 ({index} 号雇员)"
             );
-            taskHelper.Enqueue
-            (
-                () =>
-                {
-                    if (taskHelper.AbortByConflictKey(ParentModule)) return true;
-                    return LeaveRetainer();
-                },
-                "回到雇员列表"
-            );
-        }
-
-        private void EnqueueRetainersGilShareMethodSecond(uint index)
-        {
-            taskHelper.Enqueue
-            (
-                () =>
-                {
-                    if (taskHelper.AbortByConflictKey(ParentModule)) return true;
-                    return ParentModule.EnterRetainer(index);
-                },
-                $"选择进入 {index} 号雇员"
-            );
-            taskHelper.Enqueue
-            (
-                () =>
-                {
-                    if (taskHelper.AbortByConflictKey(ParentModule)) return true;
-                    return AddonSelectStringEvent.Select(["金币管理", "金幣管理", "Entrust or withdraw gil", "ギルの受け渡し"]);
-                },
-                IsCN ? "选择进入金币管理" : "Select Gil Management"            );
-            taskHelper.Enqueue
-            (
-                () =>
-                {
-                    if (taskHelper.AbortByConflictKey(ParentModule)) return true;
-                    if (!Bank->IsAddonAndNodesReady()) return false;
-
-                    var gils = AddonBankEvent.RetainerGilAmount;
-
-                    if (gils <= 0)
-                        AddonBankEvent.ClickCancel();
-                    else
-                    {
-                        AddonBankEvent.SetNumber((uint)gils);
-                        AddonBankEvent.ClickConfirm();
-                    }
-
-                    Bank->Close(true);
-                    return true;
-                },
-                IsCN ? $"使用 2 号方法取出 {index} 号雇员的金币" : $"Withdraw Gil for retainer {index} using Method 2"
-            );
-
-            // 回到雇员列表
             taskHelper.Enqueue
             (
                 () =>
@@ -642,7 +617,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                         () =>
                         {
                             if (taskHelper.AbortByConflictKey(ParentModule)) return true;
-                            return AddonSelectStringEvent.Select(["道具管理", "Entrust or withdraw items", "アイテムの受け渡し"]);
+                            return AddonSelectStringEvent.Select(["道具管理", "Entrust or withdraw items", "アイテムの受け渡し", "아이템 주고받기"]);
                         },
                         IsCN ? "选择道具管理" : "Select Entrust items"                    );
                     taskHelper.Enqueue
@@ -786,7 +761,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
     {
         private TaskHelper? taskHelper;
 
-        private static readonly string[] VentureCompleteTexts = ["结束", "Complete", "完了"];
+        private static readonly string[] VentureCompleteTexts = ["结束", "Complete", "完了", "완료"];
 
         public override bool DrawConfigCondition() => false;
 
@@ -812,17 +787,28 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
         public override TreeListCategoryNode CreateOverlayCategory(float width) =>
             CreateOverlayCategory
             (
-                DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-Collect-Title"),
+                Lang.Get("AutoRetainerWork-Collect-Title"),
                 width,
                 CreateOverlayCheckbox
                 (
-                    DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-Collect-AutoCollect"),
+                    Lang.Get("AutoRetainerWork-Collect-AutoCollect"),
                     ParentModule.config.AutoRetainerCollect,
                     isChecked =>
                     {
                         ParentModule.config.AutoRetainerCollect = isChecked;
                         if (ParentModule.config.AutoRetainerCollect)
                             EnqueueRetainersCollect();
+                        ParentModule.config.Save(ParentModule);
+                    },
+                    width
+                ),
+                CreateOverlayCheckbox
+                (
+                    Lang.Get("AutoRetainerWork-Collect-AutoPriceAdjustAfterCollect"),
+                    ParentModule.config.AutoPriceAdjustAfterCollect,
+                    isChecked =>
+                    {
+                        ParentModule.config.AutoPriceAdjustAfterCollect = isChecked;
                         ParentModule.config.Save(ParentModule);
                     },
                     width
@@ -874,7 +860,33 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
             if (count == 0)
             {
                 if (taskHelper.IsBusy)
-                    taskHelper.Enqueue(LeaveRetainer, IsCN ? "确保所有雇员均已返回" : "Ensure all retainers have returned");                return;
+                {
+                    taskHelper.Enqueue(LeaveRetainer, IsCN ? "确保所有雇员均已返回" : "Ensure all retainers have returned");
+
+                    if (ParentModule.config.AutoPriceAdjustAfterCollect)
+                    {
+                        taskHelper.Enqueue
+                        (
+                            () =>
+                            {
+                                if (taskHelper.AbortByConflictKey(ParentModule)) return true;
+                                DService.Instance().Framework.RunOnTick
+                                (
+                                    () =>
+                                    {
+                                        if (!ParentModule.config.AutoPriceAdjustAfterCollect) return;
+
+                                        var priceAdjustWorker = Array.Find(ParentModule.workers, w => w is PriceAdjustWorker) as PriceAdjustWorker;
+                                        priceAdjustWorker?.EnqueuePriceAdjustAll();
+                                    }
+                                );
+                                return true;
+                            },
+                            "收取完成后触发自动改价"
+                        );
+                    }
+                }
+                return;
             }
 
             foreach (var index in validRetainers)
@@ -1422,7 +1434,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
 
         public bool AutoRetainerCollect = true;
 
-        public int GilsShareMethod;
+        public bool AutoPriceAdjustAfterCollect;
 
         public Dictionary<string, ItemConfig> ItemConfigs = new()
         {
@@ -1572,7 +1584,8 @@ public unsafe partial class AutoRetainerWorkCustom
         [
             "玩家所持物品",
             "Sell items in your inventory",
-            "プレイヤー所持品から"
+            "プレイヤー所持品から",
+            "플레이어 소지품에서 선택"
         ];
 
         private          TaskHelper?     taskHelper;
@@ -1717,8 +1730,10 @@ public unsafe partial class AutoRetainerWorkCustom
                 ))
             {
                 windowPos = ImGui.GetWindowPos();
-                using var font = OmenTools.OmenService.FontManager.Instance().GetUIFont(ParentModule.config.MarketItemsWindowFontScale).Push();
-                DrawMarketItemsTable();
+                using (OmenTools.OmenService.FontManager.Instance().GetUIFont(ParentModule.config.MarketItemsWindowFontScale).Push())
+                {
+                    DrawMarketItemsTable();
+                }
                 ImGui.End();
             }
 
@@ -1756,8 +1771,10 @@ public unsafe partial class AutoRetainerWorkCustom
 
             if (ImGui.Begin("上架窗口##AutoRetainerWork-PriceAdjustWorker", ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoTitleBar))
             {
-                using var font = OmenTools.OmenService.FontManager.Instance().UIFont120.Push();
-                DrawMarketUpshelf();
+                using (OmenTools.OmenService.FontManager.Instance().UIFont120.Push())
+                {
+                    DrawMarketUpshelf();
+                }
                 ImGui.End();
             }
         }
@@ -3288,7 +3305,7 @@ public unsafe partial class AutoRetainerWorkCustom
 
         #region 队列
 
-        private void EnqueuePriceAdjustAll()
+        internal void EnqueuePriceAdjustAll()
         {
             if (taskHelper.AbortByConflictKey(ParentModule)) return;
             if (ParentModule.IsAnyOtherWorkerBusy(typeof(PriceAdjustWorker))) return;
