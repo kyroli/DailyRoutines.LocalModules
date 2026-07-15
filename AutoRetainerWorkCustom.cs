@@ -265,6 +265,17 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
     {
         private TaskHelper? TaskHelper;
 
+        private static readonly string[] GilManageTexts =
+        [
+            "金币管理",
+            "Gil管理",
+            "Entrust or withdraw gil",
+            "ギルの受け渡し",
+            "길 주고받기",
+            "Gil geben oder nehmen",
+            "Confier ou récupérer de l'argent"
+        ];
+
         public override bool DrawConfigCondition() => false;
 
         public override bool IsWorkerBusy() => TaskHelper?.IsBusy ?? false;
@@ -311,7 +322,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                         () =>
                         {
                             if (TaskHelper.AbortByConflictKey(ParentModule)) return true;
-                            return AddonSelectStringEvent.Select(["金币管理", "金幣管理", "Entrust or withdraw gil", "ギルの受け渡し", "길 주고받기"]);
+                            return AddonSelectStringEvent.Select(GilManageTexts);
                         },
                         IsCN ? "选择进入金币管理" : "Select Gil Management"                    );
                     TaskHelper.Enqueue
@@ -355,6 +366,17 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
     {
         private TaskHelper? taskHelper;
         private const uint MAX_PLAYER_GIL = 999_999_999U;
+
+        private static readonly string[] GilManageTexts =
+        [
+            "金币管理",
+            "Gil管理",
+            "Entrust or withdraw gil",
+            "ギルの受け渡し",
+            "길 주고받기",
+            "Gil geben oder nehmen",
+            "Confier ou récupérer de l'argent"
+        ];
 
         public override bool DrawConfigCondition() => false;
 
@@ -523,7 +545,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                 () =>
                 {
                     if (taskHelper.AbortByConflictKey(ParentModule)) return true;
-                    return AddonSelectStringEvent.Select(["金币管理", "金幣管理", "Entrust or withdraw gil", "ギルの受け渡し", "길 주고받기"]);
+                    return AddonSelectStringEvent.Select(GilManageTexts);
                 },
                 "选择进入金币管理"
             );
@@ -562,6 +584,16 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
     ) : RetainerWorkerBase(module)
     {
         private TaskHelper? taskHelper;
+
+        private static readonly string[] ItemEntrustWithdrawTexts =
+        [
+            "道具管理", 
+            "Entrust or withdraw items", 
+            "アイテムの受け渡し",
+            "아이템 주고받기",
+            "Gegenstände übergeben oder entnehmen",
+            "Échanger des objets"
+        ];
 
         public override bool DrawConfigCondition() => false;
 
@@ -617,7 +649,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                         () =>
                         {
                             if (taskHelper.AbortByConflictKey(ParentModule)) return true;
-                            return AddonSelectStringEvent.Select(["道具管理", "Entrust or withdraw items", "アイテムの受け渡し", "아이템 주고받기"]);
+                            return AddonSelectStringEvent.Select(ItemEntrustWithdrawTexts);
                         },
                         IsCN ? "选择道具管理" : "Select Entrust items"                    );
                     taskHelper.Enqueue
@@ -761,7 +793,16 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
     {
         private TaskHelper? taskHelper;
 
-        private static readonly string[] VentureCompleteTexts = ["结束", "Complete", "完了", "완료"];
+        private static readonly string[] VentureCompleteTexts =
+        [
+            "结束",
+            "結束",
+            "Complete",
+            "完了",
+            "완료",
+            "Abgeschlossen",
+            "Terminée"
+        ];
 
         public override bool DrawConfigCondition() => false;
 
@@ -1580,12 +1621,14 @@ public unsafe partial class AutoRetainerWorkCustom
     {
         private Hook<MoveToRetainerMarketDelegate>? MoveToRetainerMarketHook;
 
-        private static readonly List<string> SellInventoryItemsText =
+        private static readonly string[] SellInventoryItemsText =
         [
             "玩家所持物品",
             "Sell items in your inventory",
             "プレイヤー所持品から",
-            "플레이어 소지품에서 선택"
+            "플레이어 소지품에서 선택",
+            "Gegenstände aus dem eigenen Inventar verkaufen",
+            "Mettre en vente un objet de votre inventaire"
         ];
 
         private          TaskHelper?     taskHelper;
