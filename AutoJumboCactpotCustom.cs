@@ -148,13 +148,7 @@ public class AutoJumboCactpotCustom : ModuleBase
             }
         );
 
-        TaskHelper.Enqueue
-        (() =>
-            {
-                AddonSelectYesnoEvent.ClickYes();
-                return false;
-            }
-        );
+        TaskHelper.Enqueue(() => AddonSelectYesnoEvent.ClickYes());
     }
 
     private class Config : ModuleConfig

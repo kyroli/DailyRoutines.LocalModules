@@ -501,10 +501,10 @@ public unsafe class AutoTripleTriad : ModuleBase
                         var itemRow = itemSheet?.GetRowOrDefault(agent->rewardItemID);
                         if (itemRow != null)
                         {
-                            var cardId = itemRow.Value.AdditionalData.RowId;
-                            if (cardId > 0)
+                            var cardID = itemRow.Value.AdditionalData.RowId;
+                            if (cardID > 0)
                             {
-                                sessionDroppedCardIDs.Add((ushort)cardId);
+                                sessionDroppedCardIDs.Add((ushort)cardID);
                             }
                         }
                     }

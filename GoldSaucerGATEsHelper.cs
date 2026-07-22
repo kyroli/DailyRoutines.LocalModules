@@ -44,16 +44,13 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
     // --- Slice Is Right 常量 ---
     private static float HalfPi => MathF.PI / 2f;
     private const float MaxDistanceSquared = 30f * 30f;
-    
-    private const double TelegraphDelaySeconds = 5;
-    private const double TelegraphDurationSeconds = 7;
 
     private const uint GimmickSingleRect = 2010777;
     private const uint GimmickDoubleRect = 2010778;
     private const uint GimmickCircle = 2010779;
 
-    private readonly Dictionary<ulong, DateTime> objectSpawnTimes = [];
-    
+    private readonly Dictionary<ulong, long> objectSpawnTimes = [];
+
     // --- 缓存数据 ---
     private readonly List<IGameObject> activeSliceObjects = [];
     private readonly List<ulong> toRemoveList = [];
@@ -82,16 +79,11 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
     private readonly List<(Vector2 Pos, float Radius, float Dist)> bombScreenPositions = new(8);
     private readonly List<(IGameObject obj, float dist)> candidates = new(16);
 
-    private static bool IsTelegraphVisible(DateTime firstSeen)
-    {
-        var now = DateTime.Now;
-        var visibleFrom = firstSeen.AddSeconds(TelegraphDelaySeconds);
-        var visibleUntil = visibleFrom.AddSeconds(TelegraphDurationSeconds);
-        return now >= visibleFrom && now < visibleUntil;
-    }
+    private static bool IsTelegraphVisible(long firstSeen) =>
+        Environment.TickCount64 - firstSeen is >= 5000 and < 12000;
 
-    private static bool IsTelegraphExpired(DateTime firstSeen) =>
-        DateTime.Now >= firstSeen.AddSeconds(TelegraphDelaySeconds + TelegraphDurationSeconds);
+    private static bool IsTelegraphExpired(long firstSeen) =>
+        Environment.TickCount64 - firstSeen >= 12000;
 
     private static bool TryGetSliceHelperType(OmenTools.Dalamud.Services.ObjectTable.Abstractions.ObjectKinds.IGameObject gameObject, out uint helperType)
     {
@@ -265,7 +257,7 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
 
     private void RenderSliceObject(ulong objID, Vector3 position, float rotation, uint helperType)
     {
-        var now = DateTime.Now;
+        var now = Environment.TickCount64;
         if (!objectSpawnTimes.TryGetValue(objID, out var spawnTime))
         {
             objectSpawnTimes[objID] = now;
