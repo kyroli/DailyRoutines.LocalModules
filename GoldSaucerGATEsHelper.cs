@@ -18,7 +18,7 @@ using OmenTools.Extensions;
 using OmenTools.Interop.Windows.Helpers;
 using OmenTools.OmenService;
 using OmenTools.Threading;
-using IGameObject = OmenTools.Dalamud.Services.ObjectTable.Abstractions.ObjectKinds.IGameObject;
+using IGameObject = OmenTools.Dalamud.Services.Game.Object.Abstractions.ObjectKinds.IGameObject;
 using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
 using static OmenTools.Info.Game.Data.Addons;
 
@@ -85,7 +85,7 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
     private static bool IsTelegraphExpired(long firstSeen) =>
         Environment.TickCount64 - firstSeen >= 12000;
 
-    private static bool TryGetSliceHelperType(OmenTools.Dalamud.Services.ObjectTable.Abstractions.ObjectKinds.IGameObject gameObject, out uint helperType)
+    private static bool TryGetSliceHelperType(OmenTools.Dalamud.Services.Game.Object.Abstractions.ObjectKinds.IGameObject gameObject, out uint helperType)
     {
         helperType = 0;
         if (!gameObject.IsValid()) return false;

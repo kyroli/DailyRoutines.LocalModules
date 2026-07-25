@@ -289,7 +289,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
             TaskHelper = null;
         }
 
-        public override TreeListCategoryNode CreateOverlayCategory(float width) =>
+        public override CollaspingCategoryNode CreateOverlayCategory(float width) =>
             CreateOverlayCategory
             (
                 DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-GilsWithdraw-Title"),
@@ -391,7 +391,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
             taskHelper = null;
         }
 
-        public override TreeListCategoryNode CreateOverlayCategory(float width) =>
+        public override CollaspingCategoryNode CreateOverlayCategory(float width) =>
             CreateOverlayCategory
             (
                 Lang.Get("AutoRetainerWork-GilsShare-Title"),
@@ -616,7 +616,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
             taskHelper = null;
         }
 
-        public override TreeListCategoryNode CreateOverlayCategory(float width) =>
+        public override CollaspingCategoryNode CreateOverlayCategory(float width) =>
             CreateOverlayCategory
             (
                 DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-EntrustDups-Title"),
@@ -745,7 +745,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
             taskHelper = null;
         }
 
-        public override TreeListCategoryNode CreateOverlayCategory(float width) =>
+        public override CollaspingCategoryNode CreateOverlayCategory(float width) =>
             CreateOverlayCategory
             (
                 DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-Refresh-Title"),
@@ -825,7 +825,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
             taskHelper = null;
         }
 
-        public override TreeListCategoryNode CreateOverlayCategory(float width) =>
+        public override CollaspingCategoryNode CreateOverlayCategory(float width) =>
             CreateOverlayCategory
             (
                 Lang.Get("AutoRetainerWork-Collect-Title"),
@@ -1016,12 +1016,12 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
 
         public abstract void Init();
 
-        public virtual TreeListCategoryNode? CreateOverlayCategory(float width) => null;
+        public virtual CollaspingCategoryNode? CreateOverlayCategory(float width) => null;
 
         public virtual void DrawConfig() { }
 
         public abstract void Uninit();
-        protected static TreeListCategoryNode CreateOverlayCategory(string title, float width, params NodeBase[] nodes)
+        protected static CollaspingCategoryNode CreateOverlayCategory(string title, float width, params NodeBase[] nodes)
         {
             var contentNode = new VerticalListNode
             {
@@ -1034,7 +1034,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
             };
             contentNode.AddNode(nodes);
 
-            var categoryNode = new TreeListCategoryNode
+            var categoryNode = new CollaspingCategoryNode
             {
                 IsVisible = true,
                 Size      = new(width, 28f),
@@ -1118,7 +1118,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
     {
         private readonly AutoRetainerWorkCustom module;
         private readonly bool isFullyConstructed;
-        private TreeListNode? treeListNode;
+        private CollaspingNode? treeListNode;
 
         [System.Diagnostics.CodeAnalysis.SetsRequiredMembers]
         public DRAutoRetainerWork(AutoRetainerWorkCustom module) : base("RetainerList")
@@ -1705,7 +1705,7 @@ public unsafe partial class AutoRetainerWorkCustom
             ItemConfigEditor();
         }
 
-        public override TreeListCategoryNode CreateOverlayCategory(float width) =>
+        public override CollaspingCategoryNode CreateOverlayCategory(float width) =>
             CreateOverlayCategory
             (
                 DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-PriceAdjust-Title"),

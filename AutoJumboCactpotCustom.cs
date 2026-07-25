@@ -16,6 +16,7 @@ using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using static OmenTools.Info.Game.Data.Addons;
+using static OmenTools.Global.Globals;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -61,18 +62,18 @@ public class AutoJumboCactpotCustom : ModuleBase
 
         TaskHelper ??= new() { TimeoutMS = 5_000 };
 
-        OmenTools.DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "LotteryWeeklyInput", OnAddon);
+        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "LotteryWeeklyInput", OnAddon);
         
         if (LotteryWeeklyInput != null && AtkUnitBaseExtension.IsAddonAndNodesReady(ref *LotteryWeeklyInput))
             OnAddon(AddonEvent.PostSetup, null!);
     }
     
     protected override void Uninit() =>
-        OmenTools.DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
+        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
 
     protected override void ConfigUI()
     {
-        ImGui.SetNextItemWidth(180f); 
+        ImGui.SetNextItemWidth(180f * GlobalUIScale); 
 
         using (var combo = ImRaii.Combo(Loc.SelectionMode, NumberModeLoc.GetValueOrDefault(config.NumberMode, string.Empty)))
         {
@@ -92,7 +93,7 @@ public class AutoJumboCactpotCustom : ModuleBase
         if (config.NumberMode == Mode.Fixed)
         {
             ImGui.SameLine();
-            ImGui.SetNextItemWidth(100f);
+            ImGui.SetNextItemWidth(100f * GlobalUIScale);
             if (ImGui.InputInt($"##{Loc.InputNumber}", ref config.FixedNumber))
             {
                 config.FixedNumber = Math.Clamp(config.FixedNumber, 0, 9999);
@@ -113,7 +114,7 @@ public class AutoJumboCactpotCustom : ModuleBase
         TaskHelper.Enqueue
         (() =>
             {
-                if (!OmenTools.DService.Instance().Condition.IsOccupiedInEvent)
+                if (!DService.Instance().Condition.IsOccupiedInEvent)
                 {
                     TaskHelper.Abort();
                     return true;

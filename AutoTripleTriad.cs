@@ -7,6 +7,7 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
@@ -15,6 +16,7 @@ using OmenTools;
 using OmenTools.Dalamud;
 using OmenTools.Extensions;
 using Lumina.Excel.Sheets;
+using static OmenTools.Global.Globals;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -28,12 +30,6 @@ public unsafe class AutoTripleTriad : ModuleBase
             public int TimesToPlay = 1;
             public bool UseRecommendedDeck = true;
             public int SelectedDeck = 1;
-        }
-
-        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 0x1d0)]
-        private unsafe struct AgentTripleTriad
-        {
-            [System.Runtime.InteropServices.FieldOffset(0x1c8)] public uint rewardItemID;
         }
 
         public override ModuleInfo Info => new()
@@ -63,7 +59,6 @@ public unsafe class AutoTripleTriad : ModuleBase
         private FieldInfo? solverGameStaticField;
         private FieldInfo? solverPreGameDecksStaticField;
 
-
         // Caching reflection members for performance
         private FieldInfo? solverGameCurrentNPCField;
         private PropertyInfo? solverGameHasErrorsProp;
@@ -90,8 +85,8 @@ public unsafe class AutoTripleTriad : ModuleBase
         private long lastNPCCheckTime = 0;
         private int cachedNPCID = -1;
         private bool isExitingFromCompletion = false;
-        private List<(string Name, bool IsOwned, ushort CardID)> npcDropsCache = new();
-        private HashSet<ushort> sessionDroppedCardIDs = new();
+        private List<(string Name, ushort CardID)> npcDropsCache = new();
+        private Dictionary<ushort, uint> cardToItemMap = new();
 
         protected override void ConfigUI()
         {
@@ -129,7 +124,7 @@ public unsafe class AutoTripleTriad : ModuleBase
             if (config.PlayXTimes)
             {
                 ImGui.Indent();
-                ImGui.SetNextItemWidth(100f);
+                ImGui.SetNextItemWidth(100f * GlobalUIScale);
                 if (ImGui.InputInt(GetLoc("TargetX"), ref config.TimesToPlay))
                 {
                     if (config.TimesToPlay < 1) config.TimesToPlay = 1;
@@ -142,7 +137,7 @@ public unsafe class AutoTripleTriad : ModuleBase
             if (!config.UseRecommendedDeck)
             {
                 ImGui.Indent();
-                ImGui.SetNextItemWidth(100f);
+                ImGui.SetNextItemWidth(100f * GlobalUIScale);
                 if (ImGui.InputInt(GetLoc("ManualDeck"), ref config.SelectedDeck))
                 {
                     config.SelectedDeck = Math.Max(1, Math.Min(10, config.SelectedDeck));
@@ -160,7 +155,7 @@ public unsafe class AutoTripleTriad : ModuleBase
                 ImGui.Indent();
                 foreach (var drop in npcDropsCache)
                 {
-                    bool isOwned = drop.IsOwned || sessionDroppedCardIDs.Contains(drop.CardID);
+                    bool isOwned = IsCardOwned(drop.CardID);
                     string symbol = isOwned ? "[√]" : "[  ]";
                     ImGui.Text($"{symbol} {drop.Name}");
                 }
@@ -212,7 +207,8 @@ public unsafe class AutoTripleTriad : ModuleBase
             cachedNPCID = -1;
             lastNPCCheckTime = 0;
             isExitingFromCompletion = false;
-            sessionDroppedCardIDs.Clear();
+            cardToItemMap.Clear();
+            isCardToItemMapInitialized = false;
 
             config.EnableTripleTriad = false;
             SaveConfig(config);
@@ -237,8 +233,6 @@ public unsafe class AutoTripleTriad : ModuleBase
 
             solverGameStaticField = null;
             solverPreGameDecksStaticField = null;
-
-
         }
 
         private bool TryInitializeReflection()
@@ -378,7 +372,6 @@ public unsafe class AutoTripleTriad : ModuleBase
                 {
                     config.EnableTripleTriad = true;
                     matchCount = 0;
-                    sessionDroppedCardIDs.Clear();
                     SaveConfig(config);
                 }
                 lastPrepCloseTime = 0;
@@ -489,27 +482,6 @@ public unsafe class AutoTripleTriad : ModuleBase
                 if (Environment.TickCount64 - lastResultActionTime < 1000) return;
                 lastResultActionTime = Environment.TickCount64;
 
-                // 追踪本场掉落的卡牌 cardID（通过 Agent 获取奖励物品 ID，再映射到 cardID）
-                nint agentPtr = DService.Instance().GameGUI.FindAgentInterface((nint)addonResult);
-                if (agentPtr != nint.Zero)
-                {
-                    var agent = (AgentTripleTriad*)agentPtr;
-                    if (agent->rewardItemID > 0)
-                    {
-                        // 通过 Lumina 查 Item 表将 ItemID 映射到 CardID
-                        var itemSheet = DService.Instance().Data.GetExcelSheet<Item>();
-                        var itemRow = itemSheet?.GetRowOrDefault(agent->rewardItemID);
-                        if (itemRow != null)
-                        {
-                            var cardID = itemRow.Value.AdditionalData.RowId;
-                            if (cardID > 0)
-                            {
-                                sessionDroppedCardIDs.Add((ushort)cardID);
-                            }
-                        }
-                    }
-                }
-
                 bool shouldStop = false;
 
                 if (config.PlayUntilAllUnownedCardsDrop)
@@ -548,10 +520,7 @@ public unsafe class AutoTripleTriad : ModuleBase
                                         bool allCardsOwned = true;
                                         foreach (int cardID in rewardCards)
                                         {
-                                            bool isOwned = uiState->IsTripleTriadCardUnlocked((ushort)cardID)
-                                                           || sessionDroppedCardIDs.Contains((ushort)cardID);
-                                            
-                                            if (!isOwned)
+                                            if (!IsCardOwned((ushort)cardID))
                                             {
                                                 allCardsOwned = false;
                                                 break;
@@ -646,14 +615,10 @@ public unsafe class AutoTripleTriad : ModuleBase
                             var rewardCards = (System.Collections.IEnumerable)gameNPCInfoRewardCardsField!.GetValue(npcInfo)!;
                             if (rewardCards == null) return;
                             
-                            // 使用 UIState 内存直读判断卡牌拥有状态
-                            var uiState = UIState.Instance();
                             var sheet = DService.Instance().Data.GetExcelSheet<TripleTriadCard>();
                             
                             foreach (int cardID in rewardCards)
                             {
-                                bool isOwned = uiState != null && uiState->IsTripleTriadCardUnlocked((ushort)cardID);
-                                
                                 string cardName = $"Card #{cardID}";
                                 try
                                 {
@@ -666,7 +631,7 @@ public unsafe class AutoTripleTriad : ModuleBase
                                     // 忽略 Lumina 解析异常，防止空指针阻断流程
                                 }
                                 
-                                npcDropsCache.Add((cardName, isOwned, (ushort)cardID));
+                                npcDropsCache.Add((cardName, (ushort)cardID));
                             }
                         }
                     }
@@ -810,5 +775,81 @@ public unsafe class AutoTripleTriad : ModuleBase
                 "ErrRec" => IsCN ? "读取推荐卡组失败: " : "Failed to read recommended deck: ",
                 _ => key
             };
+        }
+
+        private bool isCardToItemMapInitialized = false;
+
+        private unsafe bool IsCardOwned(ushort cardID)
+        {
+            if (cardID == 0) return false;
+
+            try
+            {
+                var uiState = UIState.Instance();
+                if (uiState != null && uiState->IsTripleTriadCardUnlocked(cardID))
+                {
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                DService.Instance().Log.Error(ex, $"AutoTripleTriad: 手册卡牌解锁检查失败 cardID={cardID}");
+            }
+
+            try
+            {
+                EnsureCardToItemMapInitialized();
+                var inventoryManager = InventoryManager.Instance();
+                if (inventoryManager != null && cardToItemMap.TryGetValue(cardID, out var itemID))
+                {
+                    if (inventoryManager->GetInventoryItemCount(itemID) > 0)
+                    {
+                        return true;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DService.Instance().Log.Error(ex, $"AutoTripleTriad: 背包卡牌检查失败 cardID={cardID}");
+            }
+
+            return false;
+        }
+
+        private void EnsureCardToItemMapInitialized()
+        {
+            if (isCardToItemMapInitialized) return;
+            isCardToItemMapInitialized = true;
+            cardToItemMap.Clear();
+
+            try
+            {
+                var itemSheet = DService.Instance().Data.GetExcelSheet<Item>();
+                if (itemSheet == null) return;
+
+                foreach (var itemRow in itemSheet)
+                {
+                    try
+                    {
+                        if (itemRow.ItemUICategory.RowId == 86)
+                        {
+                            var cardID = (ushort)itemRow.AdditionalData.RowId;
+                            if (cardID > 0)
+                            {
+                                cardToItemMap[cardID] = itemRow.RowId;
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // 忽略单个非卡牌物品的解析异常
+                    }
+                }
+                DService.Instance().Log.Debug($"AutoTripleTriad: 卡牌物品映射初始化完成，加载 {cardToItemMap.Count} 项");
+            }
+            catch (Exception ex)
+            {
+                DService.Instance().Log.Error(ex, "AutoTripleTriad: 初始化卡牌物品映射失败");
+            }
         }
     }
