@@ -100,7 +100,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
         ];
     }
 
-    private static bool wasTalkSkipEnabledByUs;
+    private static bool isTalkSkipAutoEnabled;
 
     protected override void Init()
     {
@@ -114,14 +114,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
         DService.Instance().Condition.ConditionChange += OnConditionChanged;
 
         if (DService.Instance().Condition[ConditionFlag.OccupiedSummoningBell])
-        {
-            var talkSkipModule = ModuleManager.Instance().GetModuleByName("AutoTalkSkip");
-            if (talkSkipModule != null && !(ModuleManager.Instance().IsModuleEnabled("AutoTalkSkip") ?? false))
-            {
-                wasTalkSkipEnabledByUs = true;
-                ModuleManager.Instance().LoadAsync(talkSkipModule);
-            }
-        }
+            OnConditionChanged(ConditionFlag.OccupiedSummoningBell, true);
     }
 
     protected override void Uninit()
@@ -133,40 +126,41 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
             worker.Uninit();
 
         DService.Instance().Condition.ConditionChange -= OnConditionChanged;
-
-        if (wasTalkSkipEnabledByUs)
-        {
-            wasTalkSkipEnabledByUs = false;
-            var talkSkipModule = ModuleManager.Instance().GetModuleByName("AutoTalkSkip");
-            if (talkSkipModule != null)
-                ModuleManager.Instance().UnloadAsync(talkSkipModule);
-        }
+        DisableTalkSkipIfAutoEnabled();
     }
 
     private static void OnConditionChanged(ConditionFlag flag, bool value)
     {
-        if (flag != ConditionFlag.OccupiedSummoningBell) return;
-
-        var talkSkipModule = ModuleManager.Instance().GetModuleByName("AutoTalkSkip");
-        if (talkSkipModule == null) return;
-
-        if (value)
+        if (flag == ConditionFlag.OccupiedSummoningBell && value)
         {
-            var isEnabled = ModuleManager.Instance().IsModuleEnabled("AutoTalkSkip") ?? false;
-            if (!isEnabled)
+            isTalkSkipAutoEnabled = true;
+            if (ModuleManager.Instance().GetModuleByName("AutoTalkSkip") is { } module &&
+                !(ModuleManager.Instance().IsModuleEnabled("AutoTalkSkip") ?? false))
             {
-                wasTalkSkipEnabledByUs = true;
-                ModuleManager.Instance().LoadAsync(talkSkipModule);
+                ModuleManager.Instance().LoadAsync(module);
             }
         }
-        else
+        else if ((flag == ConditionFlag.OccupiedSummoningBell || flag == ConditionFlag.Occupied) && !value)
         {
-            if (wasTalkSkipEnabledByUs)
+            var cond = DService.Instance().Condition;
+            if (!cond[ConditionFlag.OccupiedSummoningBell] && !cond[ConditionFlag.Occupied])
             {
-                wasTalkSkipEnabledByUs = false;
-                ModuleManager.Instance().UnloadAsync(talkSkipModule);
+                DisableTalkSkipIfAutoEnabled();
             }
         }
+        else if ((flag == ConditionFlag.BoundByDuty || flag == ConditionFlag.BetweenAreas) && value)
+        {
+            DisableTalkSkipIfAutoEnabled();
+        }
+    }
+
+    private static void DisableTalkSkipIfAutoEnabled()
+    {
+        if (isTalkSkipAutoEnabled && ModuleManager.Instance().GetModuleByName("AutoTalkSkip") is { } module)
+        {
+            ModuleManager.Instance().UnloadAsync(module);
+        }
+        isTalkSkipAutoEnabled = false;
     }
 
     private class TownDispatchWorker
