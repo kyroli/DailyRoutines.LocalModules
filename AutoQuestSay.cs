@@ -1,32 +1,21 @@
 using System;
-using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 
 using Dalamud.Game;
-using Dalamud.Game.Addon.Lifecycle;
-using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
-using Dalamud.Game.ClientState.Objects.Enums;
-using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Hooking;
-using Dalamud.Interface.Colors;
-using Dalamud.Interface.Utility.Raii;
 using Dalamud.Memory;
-using DailyRoutines.Common.Extensions;
 using Dalamud.Utility;
-using Dalamud.Bindings.ImGui;
 
+using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
-using FFXIVClientStructs.FFXIV.Client.UI.Arrays;
 
 using Lumina.Excel;
 using Lumina.Excel.Sheets;
@@ -34,9 +23,7 @@ using Lumina.Text.ReadOnly;
 
 using OmenTools;
 using OmenTools.Dalamud;
-using OmenTools.Dalamud.Helpers;
 using OmenTools.Extensions;
-using OmenTools.Info.Game.Data;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
 using OmenTools.Threading;
@@ -44,15 +31,16 @@ using OmenTools.Threading;
 using EventHandler = FFXIVClientStructs.FFXIV.Client.Game.Event.EventHandler;
 using EventHandlerContent = FFXIVClientStructs.FFXIV.Client.Game.Event.EventHandlerContent;
 using GameObject = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject;
+using ObjectKind = FFXIVClientStructs.FFXIV.Client.Game.Object.ObjectKind;
 
 namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoQuestSay : ModuleBase
 {
-    public override ModuleInfo Info => new()
+    public override ModuleInfo Info { get; } = new()
     {
-        Title       = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "自动任务说话" : "Auto Quest Say",
-        Description = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "当任务目标要求在当前频道说出指定台词时，点击目标将自动在当前频道发送台词。" : "Automatically sends the required chat line when clicking on quest targets that require saying specific lines.",
+        Title       = DService.Instance().ClientState.ClientLanguage == ClientLanguage.ChineseSimplified ? "自动任务说话" : "Auto Quest Say",
+        Description = DService.Instance().ClientState.ClientLanguage == ClientLanguage.ChineseSimplified ? "当任务目标要求在当前频道说出指定台词时，点击目标将自动在当前频道发送台词。" : "Automatically sends the required chat line when clicking on quest targets that require saying specific lines.",
         Category    = ModuleCategory.General,
         Author      = ["nynpsu"],
         ReportURL   = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
@@ -60,78 +48,42 @@ public unsafe class AutoQuestSay : ModuleBase
 
     public delegate ulong InteractWithObjectDelegate(TargetSystem* system, GameObject* obj, bool checkLOS);
 
-    #region Static Fields & Cache
-
     private static readonly Regex ChineseRegex = new(@"(?:“|""""|「)([^“”""""「」]+?)(?:”|""""|」)", RegexOptions.Compiled);
     private static readonly Regex JapaneseRegex = new(@"(?:「)([^「」]+?)(?:」)", RegexOptions.Compiled);
     private static readonly Regex EnglishRegex = new(@"(?:""""|“)([^""""“”]+?)(?:""""|”)", RegexOptions.Compiled);
     private static readonly Regex GermanRegex = new(@"(?:„|»)([^„“»«]+?)(?:“|«)", RegexOptions.Compiled);
     private static readonly Regex FrenchRegex = new(@"(?:«\s*|“)([^«»“”]+?)(?:\s*»|”)", RegexOptions.Compiled);
+    private static readonly Regex SayKeyRegex = new(@"_(SAY|SAYTODO|SYSTEM)_", RegexOptions.Compiled);
 
-    private static readonly Regex KeyRegex = new(@"_(SAY|SAYTODO|SYSTEM)_", RegexOptions.Compiled);
-    
-    private static FrozenDictionary<string, (string IDStr, uint RowID)>? QuestNameIDCache;
-    private static bool IsCacheInitializing;
-    
-    #endregion
-
-    #region Instance Fields
-    
     private Hook<InteractWithObjectDelegate>? InteractWithObjectHook;
-    private readonly List<ActiveSayTask> ActiveSayTasks = [];
     private readonly Dictionary<string, ExcelSheet<QuestDialogue>> DialogueSheets = [];
-    
     private ChatManager? Chat;
     private Regex? CurrentSayRegex;
-    private long LastMountedTime; 
-    private int LastQuestDataHash;
-    
-    private record struct LocStrings(string InitializingCache, string QuestDetails, string NoActiveTasks, string LinePrefix, string SourcePrefix);
-    private LocStrings Loc;
-
-    #endregion
+    private long LastMountedTime;
 
     #region Module Lifecycle
 
     protected override void Init()
     {
-        Loc = DService.Instance().ClientState.ClientLanguage switch
-        {
-            Dalamud.Game.ClientLanguage.ChineseSimplified => new(
-                "正在初始化任务数据库缓存...", "任务详情", "当前没有活动中的说话任务", "台词:", "来源:"),
-            _ => new(
-                "Initializing quest database cache...", "Quest Details", "No active 'Say' tasks", "Line:", "Source:")
-        };
-
         Chat = DService.Instance().GetOmenService<ChatManager>();
 
         CurrentSayRegex = DService.Instance().ClientState.ClientLanguage switch
         {
             ClientLanguage.Japanese => JapaneseRegex,
-            ClientLanguage.English => EnglishRegex,
-            ClientLanguage.German => GermanRegex,
-            ClientLanguage.French => FrenchRegex,
-            _ => ChineseRegex
+            ClientLanguage.English  => EnglishRegex,
+            ClientLanguage.German   => GermanRegex,
+            ClientLanguage.French   => FrenchRegex,
+            _                       => ChineseRegex
         };
 
         InteractWithObjectHook ??= DService.Instance().Hook.HookFromMemberFunction<InteractWithObjectDelegate>(
             typeof(TargetSystem.MemberFunctionPointers), "InteractWithObject", InteractWithObjectDetour);
         
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreRequestedUpdate, "_ToDoList", OnToDoListUpdate);
-
-        if (QuestNameIDCache == null && !IsCacheInitializing)
-        {
-            IsCacheInitializing = true;
-            Task.Run(BuildQuestCache);
-        }
-
-        UpdateCache();
+        InteractWithObjectHook.Enable();
     }
 
     protected override void Uninit()
     {
-        DService.Instance().AddonLifecycle.UnregisterListener(OnToDoListUpdate);
-
         if (InteractWithObjectHook != null)
         {
             InteractWithObjectHook.Disable();
@@ -139,300 +91,149 @@ public unsafe class AutoQuestSay : ModuleBase
             InteractWithObjectHook = null;
         }
 
-        ActiveSayTasks.Clear();
         DialogueSheets.Clear();
-        LastQuestDataHash = 0;
-    }
-
-    #endregion
-
-    #region UI
-
-    protected override void ConfigUI()
-    {
-        if (IsCacheInitializing)
-        {
-            ImGui.TextColored(ImGuiColors.DalamudOrange, Loc.InitializingCache);
-        }
-
-        if (ImGui.CollapsingHeader(Loc.QuestDetails, ImGuiTreeNodeFlags.DefaultOpen))
-        {
-            if (ActiveSayTasks.Count == 0)
-            {
-                ImGui.TextDisabled(Loc.NoActiveTasks);
-            }
-            else
-            {
-                foreach (var task in ActiveSayTasks)
-                {
-                    ImGui.BulletText($"{Loc.LinePrefix} {task.SayMessage}");
-                    using (ImRaii.PushIndent())
-                    {
-                        ImGui.TextDisabled($"{Loc.SourcePrefix} {task.Detail}");
-                    }
-                }
-            }
-        }
+        LastMountedTime = 0;
     }
 
     #endregion
 
     #region Core Logic
 
-    private static void BuildQuestCache()
-    {
-        try
-        {
-            var cache = new Dictionary<string, (string, uint)>(StringComparer.OrdinalIgnoreCase);
-            var sheet = LuminaGetter.Get<Quest>();
-            
-            if (sheet != null)
-            {
-                foreach (var q in sheet)
-                {
-                    if (q.Name.IsEmpty) continue;
-                    
-                    var qName = q.Name.ToDalamudString().TextValue.Trim();
-                    if (string.IsNullOrEmpty(qName)) continue;
-                    
-                    cache.TryAdd(qName, (q.Id.ToString(), q.RowId));
-                }
-            }
-            
-            QuestNameIDCache = cache.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        }
-        finally
-        {
-            IsCacheInitializing = false;
-        }
-    }
-
-    private void OnToDoListUpdate(AddonEvent type, AddonArgs args)
-    {
-        if (!Throttler.Shared.Throttle("AutoQuestSay-UpdateCache", 500)) 
-            return;
-            
-        UpdateCache();
-    }
-
     private ulong InteractWithObjectDetour(TargetSystem* system, GameObject* obj, bool checkLOS)
     {
-        if (obj == null) 
+        if (!ShouldProcessInteraction(obj, out var questID))
             return InteractWithObjectHook!.Original(system, obj, checkLOS);
 
-        var kind = obj->ObjectKind;
-        if (kind is not (FFXIVClientStructs.FFXIV.Client.Game.Object.ObjectKind.EventNpc or FFXIVClientStructs.FFXIV.Client.Game.Object.ObjectKind.EventObj))
-            return InteractWithObjectHook!.Original(system, obj, checkLOS);
+        var sayMessage = GetSayMessageFromLumina(questID);
 
-        if (DService.Instance().Condition[ConditionFlag.Mounted])
+        if (!string.IsNullOrEmpty(sayMessage) && Throttler<string>.Shared.Throttle("AutoQuestSay-Say", 800))
         {
-            LastMountedTime = Environment.TickCount64;
-            return InteractWithObjectHook!.Original(system, obj, checkLOS);
-        }
-
-        if (Environment.TickCount64 - LastMountedTime < 400)
-            return InteractWithObjectHook!.Original(system, obj, checkLOS);
-
-        var msg = GetSayMessageFromCache(obj);
-        if (!string.IsNullOrEmpty(msg))
-        {
-            if (Throttler<string>.Shared.Throttle("AutoQuestSay-Say", 800)) 
-            {
-                Chat?.SendMessage($"/say {msg.Trim()}");
-            }
+            Chat?.SendMessage($"/say {sayMessage.Trim()}");
         }
 
         return InteractWithObjectHook!.Original(system, obj, checkLOS);
     }
 
-    private void UpdateCache()
+    private bool ShouldProcessInteraction(GameObject* obj, out ushort questID)
     {
-        if (QuestNameIDCache == null) return;
+        questID = 0;
+        if (obj == null || obj->ObjectKind is not (ObjectKind.EventNpc or ObjectKind.EventObj))
+            return false;
 
-        var numArray = ToDoListNumberArray.Instance();
-        var stringArray = ToDoListStringArray.Instance();
-        
-        if (numArray == null || stringArray == null || !numArray->QuestListEnabled) 
+        var condition = DService.Instance().Condition;
+        if (condition[ConditionFlag.BetweenAreas] || condition[ConditionFlag.OccupiedInCutSceneEvent])
+            return false;
+
+        if (condition[ConditionFlag.Mounted])
         {
-            if (ActiveSayTasks.Count > 0)
-            {
-                ActiveSayTasks.Clear();
-                DialogueSheets.Clear();
-                LastQuestDataHash = 0;
-                ManageHookState();
-            }
-            return;
+            LastMountedTime = Environment.TickCount64;
+            return false;
         }
 
-        var entryCount = numArray->QuestCount;
-        var currentEntries = new List<(string Title, string Detail)>();
-        var currentHash = 17;
+        if (Environment.TickCount64 - LastMountedTime < 400)
+            return false;
 
-        for (var i = 0; i < entryCount; i++)
-        {
-            var rawTitlePtr = (byte*)stringArray->QuestTexts[i];
-            var rawDetailPtr = (byte*)stringArray->QuestTexts[entryCount + i];
-            
-            if (rawTitlePtr == null || rawDetailPtr == null) continue;
+        questID = GetQuestIDFromObject(obj);
+        if (questID == 0)
+            return false;
 
-            var titleSe = MemoryHelper.ReadSeStringNullTerminated((nint)rawTitlePtr);
-            var detailSe = MemoryHelper.ReadSeStringNullTerminated((nint)rawDetailPtr);
-
-            var titleText = titleSe.TextValue.Trim();
-            var detailText = detailSe.TextValue.Trim();
-
-            if (string.IsNullOrWhiteSpace(titleText) || string.IsNullOrWhiteSpace(detailText))
-                continue;
-
-            currentEntries.Add((titleText, detailText));
-            currentHash = HashCode.Combine(currentHash, titleText, detailText);
-        }
-
-        if (currentHash == LastQuestDataHash) return;
-
-        LastQuestDataHash = currentHash;
-        ActiveSayTasks.Clear();
-
-        foreach (var entry in currentEntries)
-        {
-            if (!QuestNameIDCache.TryGetValue(entry.Title, out var questData)) continue;
-
-            var sayMsg = GetQuestMessageFromLumina(questData.IDStr, entry.Detail);
-            if (!string.IsNullOrEmpty(sayMsg))
-            {
-                ActiveSayTasks.Add(new ActiveSayTask
-                {
-                    QuestID = questData.RowID,
-                    Title = entry.Title,
-                    Detail = entry.Detail,
-                    SayMessage = sayMsg
-                });
-            }
-        }
-
-        if (ActiveSayTasks.Count == 0 && DialogueSheets.Count > 0)
-        {
-            DialogueSheets.Clear();
-        }
-
-        ManageHookState();
+        var questManager = QuestManager.Instance();
+        return questManager != null && questManager->IsQuestAccepted(questID);
     }
 
-    private void ManageHookState()
+    private static ushort GetQuestIDFromObject(GameObject* obj)
     {
-        if (InteractWithObjectHook == null) return;
-        
-        if (ActiveSayTasks.Count > 0) 
-            InteractWithObjectHook.Enable();
-        else 
-            InteractWithObjectHook.Disable();
-    }
-
-    private string GetSayMessageFromCache(GameObject* obj)
-    {
-        if (obj == null) return string.Empty;
-
         var primaryEvent = obj->EventId;
         if (primaryEvent.ContentId == EventHandlerContent.Quest)
-        {
-            foreach (var task in ActiveSayTasks)
-            {
-                if ((task.QuestID & 0xFFFF) == primaryEvent.EntryId)
-                    return task.SayMessage;
-            }
-        }
+            return primaryEvent.EntryId;
 
         var handlers = stackalloc EventHandler*[32];
         var handlerCount = obj->GetEventHandlersImpl(handlers);
-        
+
         for (var i = 0; i < handlerCount; i++)
         {
             var handler = handlers[i];
             if (handler != null && handler->Info.EventId.ContentId == EventHandlerContent.Quest)
-            {
-                foreach (var task in ActiveSayTasks)
-                {
-                    if ((task.QuestID & 0xFFFF) == handler->Info.EventId.EntryId)
-                        return task.SayMessage;
-                }
-            }
+                return handler->Info.EventId.EntryId;
         }
 
-        return string.Empty;
+        return 0;
     }
 
-    private string GetQuestMessageFromLumina(string qidRaw, string detail)
+    private string GetSayMessageFromLumina(ushort questID)
     {
         try
         {
-            if (string.IsNullOrEmpty(qidRaw) || CurrentSayRegex == null) return string.Empty;
+            if (!TryGetDialogueSheet(questID, out var dialogueSheet))
+                return string.Empty;
 
-            var matches = CurrentSayRegex.Matches(detail);
-            var matchStrings = matches
-                .Select(m => m.Groups.Cast<Group>().Skip(1).FirstOrDefault(g => g.Success)?.Value ?? m.Value)
-                .Distinct()
-                .ToList();
-
-            if (matchStrings.Count == 0) return string.Empty;
-
-            var qidStr = qidRaw.PadLeft(5, '0');
-            var dir = qidStr[^5..^2];
-            var sheetName = $"quest/{dir}/{qidStr}";
-
-            if (!DialogueSheets.TryGetValue(sheetName, out var dialogueSheet))
+            // 借鉴 NoTypeSay 算法核心：遍历所有可能的 SAY 节点与指引描述文本求交集匹配
+            foreach (var qd in dialogueSheet!)
             {
-                if (DialogueSheets.Count > 20) DialogueSheets.Clear();
-                
-                dialogueSheet = DService.Instance().Data.GetExcelSheet<QuestDialogue>(name: sheetName);
-                if (dialogueSheet != null) DialogueSheets[sheetName] = dialogueSheet;
+                if (qd.Value.IsEmpty) continue;
+                var keyStr = qd.Key.ToString();
+
+                // 筛选包含 _SAY_ / _SAYTODO_ / _SYSTEM_ 的候选台词节点
+                if (!SayKeyRegex.IsMatch(keyStr)) continue;
+
+                var candidateMessage = qd.Value.ToDalamudString().TextValue.Trim();
+                if (string.IsNullOrEmpty(candidateMessage)) continue;
+
+                // 验证该候选台词是否被包含在该 QuestDialogue 对话表的目标指引（TODO/SEQ）中
+                if (IsMessageMatchedByGuidance(dialogueSheet, candidateMessage))
+                    return candidateMessage;
             }
-
-            if (dialogueSheet == null) return string.Empty;
-
-            var bestMessage = string.Empty;
-            var minDiff = int.MaxValue;
-
-            foreach (var qd in dialogueSheet)
-            {
-                if (!KeyRegex.IsMatch(qd.Key.ToString()) || qd.Value.IsEmpty) continue;
-
-                var message = qd.Value.ToString();
-                if (string.IsNullOrEmpty(message)) continue;
-
-                foreach (var m in matchStrings)
-                {
-                    if (m.Contains(message) || message.Contains(m))
-                    {
-                        var diff = Math.Abs(message.Length - m.Length);
-                        if (diff < minDiff)
-                        {
-                            minDiff = diff;
-                            bestMessage = message;
-                        }
-                    }
-                }
-            }
-
-            return bestMessage;
         }
         catch (Exception ex)
         {
-            DService.Instance().Log.Error(ex, "AutoQuestSay: Error matching quest message");
+            DService.Instance().Log.Error(ex, $"AutoQuestSay: Failed to get say message for quest {questID}");
         }
 
         return string.Empty;
     }
 
-    #endregion
-
-    #region Nested Types
-
-    private sealed class ActiveSayTask
+    private bool IsMessageMatchedByGuidance(ExcelSheet<QuestDialogue> dialogueSheet, string candidateMessage)
     {
-        public uint QuestID { get; set; }
-        public string Title { get; set; } = string.Empty;
-        public string Detail { get; set; } = string.Empty;
-        public string SayMessage { get; set; } = string.Empty;
+        if (CurrentSayRegex == null) return false;
+
+        foreach (var entry in dialogueSheet)
+        {
+            if (entry.Value.IsEmpty) continue;
+            var keyStr = entry.Key.ToString();
+
+            // 忽略台词节点本身，只比对指引与描述节点（如 TODO / SEQ）
+            if (SayKeyRegex.IsMatch(keyStr)) continue;
+
+            var guidanceText = entry.Value.ToDalamudString().TextValue;
+            var matches = CurrentSayRegex.Matches(guidanceText);
+
+            // NoTypeSay 算法精髓：判断当前指引句中被引号包裹的词汇，是否包含候选台词 candidateMessage
+            if (matches.Any(m => m.Value.Contains(candidateMessage)))
+                return true;
+        }
+
+        return false;
+    }
+
+    private bool TryGetDialogueSheet(ushort questID, out ExcelSheet<QuestDialogue>? dialogueSheet)
+    {
+        dialogueSheet = null;
+        var questRow = LuminaGetter.GetRow<Quest>(questID + 65536U);
+        if (questRow == null || questRow.Value.Id.IsEmpty)
+            return false;
+
+        var qIDStr = questRow.Value.Id.ToString().PadLeft(5, '0');
+        var dir = qIDStr.Length >= 5 ? qIDStr[^5..^2] : "000";
+        var sheetName = $"quest/{dir}/{qIDStr}";
+
+        if (!DialogueSheets.TryGetValue(sheetName, out dialogueSheet))
+        {
+            dialogueSheet = DService.Instance().Data.GetExcelSheet<QuestDialogue>(name: sheetName);
+            if (dialogueSheet != null)
+                DialogueSheets[sheetName] = dialogueSheet;
+        }
+
+        return dialogueSheet != null;
     }
 
     #endregion
