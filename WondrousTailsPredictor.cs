@@ -35,12 +35,12 @@ public unsafe class WondrousTailsPredictor : ModuleBase
         0x000F, 0x00F0, 0x0F00, 0xF000, 0x1111, 0x2222, 0x4444, 0x8888, 0x8421, 0x1248
     ];
 
-    private struct ProbResult
+    private struct ProbResult(bool calculated, double line1, double line2, double line3)
     {
-        public bool Calculated;
-        public double Line1;
-        public double Line2;
-        public double Line3;
+        public bool Calculated = calculated;
+        public double Line1 = line1;
+        public double Line2 = line2;
+        public double Line3 = line3;
     }
 
     private static readonly ProbResult[] MathCache = new ProbResult[65536];
@@ -51,11 +51,11 @@ public unsafe class WondrousTailsPredictor : ModuleBase
         24.0 / 11440.0    // ~0.21% (3线理论常数)
     ];
 
-    private struct LineCountInfo
+    private struct LineCountInfo(byte line1, byte line2, byte line3)
     {
-        public byte Line1;
-        public byte Line2;
-        public byte Line3;
+        public byte Line1 = line1;
+        public byte Line2 = line2;
+        public byte Line3 = line3;
     }
 
     private static readonly LineCountInfo[] LineInfoTable = new LineCountInfo[65536];
@@ -71,12 +71,11 @@ public unsafe class WondrousTailsPredictor : ModuleBase
             {
                 if ((state & w) == w) lines++;
             }
-            LineInfoTable[state] = new LineCountInfo
-            {
-                Line1 = (byte)(lines >= 1 ? 1 : 0),
-                Line2 = (byte)(lines >= 2 ? 1 : 0),
-                Line3 = (byte)(lines >= 3 ? 1 : 0)
-            };
+            LineInfoTable[state] = new LineCountInfo(
+                (byte)(lines >= 1 ? 1 : 0),
+                (byte)(lines >= 2 ? 1 : 0),
+                (byte)(lines >= 3 ? 1 : 0)
+            );
         }
     }
 
@@ -342,13 +341,7 @@ public unsafe class WondrousTailsPredictor : ModuleBase
         if (placed == 9)
         {
             var info = LineInfoTable[state];
-            cached = new ProbResult
-            {
-                Calculated = true,
-                Line1 = info.Line1,
-                Line2 = info.Line2,
-                Line3 = info.Line3
-            };
+            cached = new ProbResult(true, info.Line1, info.Line2, info.Line3);
             return cached;
         }
 
@@ -369,13 +362,12 @@ public unsafe class WondrousTailsPredictor : ModuleBase
         Enumerate(0, remainStickers, state, ref ctx);
 
         var totalPaths = TotalPathsTable[placed];
-        cached = new ProbResult
-        {
-            Calculated = true,
-            Line1 = (double)ctx.Line1 / totalPaths,
-            Line2 = (double)ctx.Line2 / totalPaths,
-            Line3 = (double)ctx.Line3 / totalPaths
-        };
+        cached = new ProbResult(
+            true,
+            (double)ctx.Line1 / totalPaths,
+            (double)ctx.Line2 / totalPaths,
+            (double)ctx.Line3 / totalPaths
+        );
             
         return cached;
 

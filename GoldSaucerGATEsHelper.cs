@@ -67,8 +67,8 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
     private static readonly float[] CircleCoses = new float[40];
 
     // --- Air Force One 常量与状态字段 ---
-    private const int ShootInterval = 100;
-    private const int DedupExpiryMS = 2000;
+    private const int ShootInterval = 150;
+    private const int DedupExpiryMS = 400;
 
     private bool wasInDuty;
     private AtkUnitBase* rideShootingAddon;
@@ -76,8 +76,7 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
     private ulong activeShotTargetID;
     private long activeShotTime;
 
-    private readonly List<(Vector2 Pos, float Radius, float Dist)> bombScreenPositions = new(8);
-    private readonly List<(IGameObject obj, float dist)> candidates = new(16);
+    private readonly List<(IGameObject obj, float dist)> candidates = [];
 
     private static bool IsTelegraphVisible(long firstSeen) =>
         Environment.TickCount64 - firstSeen is >= 5000 and < 12000;
@@ -241,7 +240,8 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
 
     private void DrawSliceIsRight()
     {
-        if (DService.Instance().ObjectTable.LocalPlayer is not { } localPlayer) return;
+        var localPlayer = DService.Instance().ObjectTable.LocalPlayer;
+        if (localPlayer == null) return;
 
         foreach (var obj in activeSliceObjects)
         {
@@ -388,7 +388,6 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
         rideShootingAddon = null;
         wasInDuty = false;
         shotBalloons.Clear();
-        bombScreenPositions.Clear();
         candidates.Clear();
         DService.Instance().Log.Information("[GoldSaucerGATEsHelper] Exited Air Force One Duty. Unregistered framework update and cleaned states.");
     }
@@ -404,7 +403,7 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
 
         if (activeShotTargetID != 0)
         {
-            if (Environment.TickCount64 - activeShotTime < 50)
+            if (Environment.TickCount64 - activeShotTime < 100)
             {
                 var target = DService.Instance().ObjectTable.SearchByID(activeShotTargetID);
                 if (target != null && gameGUI.WorldToScreen(target.Position, out var screenPos))
@@ -416,38 +415,17 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
             activeShotTargetID = 0;
         }
 
-        bombScreenPositions.Clear();
         candidates.Clear();
 
         foreach (var x in DService.Instance().ObjectTable)
         {
-            if (x.ObjectKind != Dalamud.Game.ClientState.Objects.Enums.ObjectKind.EventObj) continue;
+            if (x.ObjectKind != ObjectKind.EventObj) continue;
 
             var dataID = x.DataID;
             var eventObj = (FFXIVClientStructs.FFXIV.Client.Game.Object.EventObject*)x.Address;
 
-            if (dataID is 2015183 or 2009679)
-            {
-                if (eventObj->SharedTimelineState == 1)
-                {
-                    if (gameGUI.WorldToScreen(x.Position, out var bombScreen))
-                    {
-                        var topPos = x.Position + new Vector3(0, 2.0f, 0); 
-                        if (gameGUI.WorldToScreen(topPos, out var bombTopScreen))
-                        {
-                            var radius = Vector2.Distance(bombScreen, bombTopScreen);
-                            var dist = Vector3.Distance(player.Position, x.Position);
-                            bombScreenPositions.Add((bombScreen, radius + 8f, dist));
-                        }
-                        else
-                        {
-                            var dist = Vector3.Distance(player.Position, x.Position);
-                            bombScreenPositions.Add((bombScreen, 32f, dist));
-                        }
-                    }
-                }
-                continue;
-            }
+            // 跳过爆弹怪，不作为射击目标
+            if (dataID is 2015183 or 2009679) continue;
 
             if (dataID is 2009678 or 2009676 or 2009677 or 2015180 or 2015179 or 2015178)
             {
@@ -474,15 +452,6 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
         {
             if (!gameGUI.WorldToScreen(obj.Position, out var targetScreen)) continue;
 
-            if (IsNearBombOnScreen(targetScreen, bombScreenPositions))
-            {
-                if (Throttler.Shared.Throttle($"SkipLog-{obj.GameObjectID}", 1000))
-                {
-                    DService.Instance().Log.Information($"[GoldSaucerGATEsHelper] SKIP target {obj.Name} (ID={obj.DataID}) - too close to bomb on screen at {targetScreen}");
-                }
-                continue;
-            }
-
             bestTarget = obj;
             bestScreen = targetScreen;
             bestDist = dist;
@@ -499,7 +468,7 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
                 activeShotTime = Environment.TickCount64;
                 shotBalloons[bestTarget.GameObjectID] = Environment.TickCount64;
                 
-                DService.Instance().Log.Information($"[GoldSaucerGATEsHelper] SHOOT: {bestTarget.Name} (ID={bestTarget.DataID}, ObjID={bestTarget.GameObjectID:X}) Pos={bestTarget.Position} Screen={bestScreen} Dist={bestDist:F1}y Bombs={bombScreenPositions.Count} Candidates={candidates.Count}");
+                DService.Instance().Log.Information($"[GoldSaucerGATEsHelper] SHOOT: {bestTarget.Name} (ID={bestTarget.DataID}, ObjID={bestTarget.GameObjectID:X}) Pos={bestTarget.Position} Screen={bestScreen} Dist={bestDist:F1}y Candidates={candidates.Count}");
 
                 var shotFired = false;
                 var mountID = player.CurrentMount?.RowId ?? 0;
@@ -530,19 +499,6 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
                 }
             }
         }
-    }
-
-    private static bool IsNearBombOnScreen(Vector2 targetScreen, List<(Vector2 Pos, float Radius, float Dist)> bombScreenPositions)
-    {
-        foreach (var bomb in bombScreenPositions)
-        {
-            var dx = targetScreen.X - bomb.Pos.X;
-            var dy = targetScreen.Y - bomb.Pos.Y;
-            if (dx * dx + dy * dy < bomb.Radius * bomb.Radius)
-                return true;
-        }
-
-        return false;
     }
 
     private static bool TrySetScreenAim(Vector2 screen)

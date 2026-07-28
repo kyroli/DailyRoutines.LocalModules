@@ -85,8 +85,8 @@ public unsafe class AutoTripleTriad : ModuleBase
         private long lastNPCCheckTime = 0;
         private int cachedNPCID = -1;
         private bool isExitingFromCompletion = false;
-        private List<(string Name, ushort CardID)> npcDropsCache = new();
-        private Dictionary<ushort, uint> cardToItemMap = new();
+        private List<(string Name, ushort CardID)> npcDropsCache = [];
+        private Dictionary<ushort, uint> cardToItemMap = [];
 
         protected override void ConfigUI()
         {

@@ -38,7 +38,7 @@ public class AutoJumboCactpotCustom : ModuleBase
     private FrozenDictionary<Mode, string> NumberModeLoc = FrozenDictionary<Mode, string>.Empty;
     
     // 用于实现“随机一次”的临时状态
-    private int    sessionRandomNumber = -1;
+    private int  sessionRandomNumber = -1;
     private long lastExecuteTime     = 0;
 
     protected override unsafe void Init()
@@ -53,12 +53,12 @@ public class AutoJumboCactpotCustom : ModuleBase
                 "Selection Mode", "Fully Random", "Fixed Number", "Synchronized", "Input Number", "(Randomize first, then synchronize)")
         };
 
-        NumberModeLoc = new Dictionary<Mode, string>
-        {
-            [Mode.Random]     = Loc.ModeRandom,
-            [Mode.Fixed]      = Loc.ModeFixed,
-            [Mode.RandomOnce] = Loc.ModeSync
-        }.ToFrozenDictionary();
+        KeyValuePair<Mode, string>[] pairs = [
+            new(Mode.Random, Loc.ModeRandom),
+            new(Mode.Fixed, Loc.ModeFixed),
+            new(Mode.RandomOnce, Loc.ModeSync)
+        ];
+        NumberModeLoc = pairs.ToFrozenDictionary();
 
         TaskHelper ??= new() { TimeoutMS = 5_000 };
 
@@ -79,11 +79,11 @@ public class AutoJumboCactpotCustom : ModuleBase
         {
             if (combo)
             {
-                foreach (var modePair in NumberModeLoc)
+                foreach (var (modeKey, modeName) in NumberModeLoc)
                 {
-                    if (ImGui.Selectable(modePair.Value, modePair.Key == config.NumberMode))
+                    if (ImGui.Selectable(modeName, modeKey == config.NumberMode))
                     {
-                        config.NumberMode = modePair.Key;
+                        config.NumberMode = modeKey;
                         SaveConfig(config);
                     }
                 }
@@ -111,45 +111,41 @@ public class AutoJumboCactpotCustom : ModuleBase
     {
         TaskHelper.Abort();
 
-        TaskHelper.Enqueue
-        (() =>
+        TaskHelper.Enqueue(() =>
+        {
+            if (!DService.Instance().Condition.IsOccupiedInEvent)
             {
-                if (!DService.Instance().Condition.IsOccupiedInEvent)
-                {
-                    TaskHelper.Abort();
-                    return true;
-                }
-
-                if (!LotteryWeeklyInput->IsAddonAndNodesReady()) return false;
-
-                var number = 0;
-                var currentTime = Environment.TickCount64;
-
-                switch (config.NumberMode)
-                {
-                    case Mode.Random:
-                        number = Random.Shared.Next(0, 10000);
-                        break;
-                    case Mode.Fixed:
-                        number = Math.Clamp(config.FixedNumber, 0, 9999);
-                        break;
-                    case Mode.RandomOnce:
-                        // 如果距离上次执行超过 15 秒 (15000 毫秒)，或者是第一次执行，则重新生成随机数
-                        if (currentTime - lastExecuteTime > 15000 || sessionRandomNumber == -1)
-                        {
-                            sessionRandomNumber = Random.Shared.Next(0, 10000);
-                        }
-                        number = sessionRandomNumber;
-                        lastExecuteTime = currentTime;
-                        break;
-                }
-
-                LotteryWeeklyInput->Callback(number);
+                TaskHelper.Abort();
                 return true;
             }
-        );
+
+            if (!LotteryWeeklyInput->IsAddonAndNodesReady()) return false;
+
+            var currentTime = Environment.TickCount64;
+
+            var number = config.NumberMode switch
+            {
+                Mode.Random     => Random.Shared.Next(0, 10000),
+                Mode.Fixed      => Math.Clamp(config.FixedNumber, 0, 9999),
+                Mode.RandomOnce => GetOrGenerateSessionNumber(currentTime),
+                _               => 0
+            };
+
+            LotteryWeeklyInput->Callback(number);
+            return true;
+        });
 
         TaskHelper.Enqueue(() => AddonSelectYesnoEvent.ClickYes());
+    }
+
+    private int GetOrGenerateSessionNumber(long currentTime)
+    {
+        if (currentTime - lastExecuteTime > 15000 || sessionRandomNumber == -1)
+        {
+            sessionRandomNumber = Random.Shared.Next(0, 10000);
+        }
+        lastExecuteTime = currentTime;
+        return sessionRandomNumber;
     }
 
     private class Config : ModuleConfig
