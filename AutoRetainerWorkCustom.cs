@@ -3562,7 +3562,10 @@ public unsafe partial class AutoRetainerWorkCustom
                     if (itemMarketData != null)
                     {
                         var itemConfig = GetItemConfigByItemKey(itemMarketData.Value.Item);
-                        var modifiedPrice = forcePrice > 0 ? forcePrice : GetModifiedPrice(itemConfig, price);
+                        var finalPrice = price;
+                        if (forcePrice == 0 && PriceCacheManager.TryGetPricesCache(itemID, isItemHQ, out var cachedPrices))
+                            finalPrice = GetFinalMarketPrice(cachedPrices);
+                        var modifiedPrice = forcePrice > 0 ? forcePrice : GetModifiedPrice(itemConfig, finalPrice);
                         if (modifiedPrice == 0 || modifiedPrice == itemMarketData.Value.Price) return;
                     }
 
@@ -3573,26 +3576,37 @@ public unsafe partial class AutoRetainerWorkCustom
             );
         }
 
+        private const double AnomalyDropRatio = 0.30;
+        private const uint   AnomalyMinGap    = 5;
+
         /// <summary>
-        ///     倒查并过滤意外超低物价，返回合理的当前市场最低价格
+        ///     倒查并过滤孤立砸盘超低物价，返回合理的当前市场最低价格
         /// </summary>
-        private static uint GetFinalMarketPrice(ItemConfig itemConfig, List<uint> prices)
+        private static uint GetFinalMarketPrice(List<uint> prices)
         {
             if (prices == null || prices.Count == 0) return 0;
             if (prices.Count == 1) return prices[0];
 
             var skippedCount = 0;
-            foreach (var price in prices)
+            for (var i = 0; i < prices.Count - 1; i++)
             {
-                if (GetModifiedPrice(itemConfig, price) >= itemConfig.PriceMinimum)
-                    return price;
+                var current = prices[i];
+                var next    = prices[i + 1];
+                if (next == 0) continue;
 
+                var gap = next - current;
+
+                // 如果相邻价格跌幅未达 30% 或绝对差额小于 5 Gil，说明 current 是合理的起始物价
+                if ((double)gap / next < AnomalyDropRatio || gap < AnomalyMinGap)
+                    return current;
+
+                // 否则 current 属于孤立超低价，跳过 current 尝试下一个
                 skippedCount++;
-                if (skippedCount > 2)
-                    break;
+                if (skippedCount >= 2)
+                    return next;
             }
 
-            return prices[0];
+            return prices[^1];
         }
 
         private void EnqueuePriceAdjustSingleItem(ushort slot, uint marketPrice, uint forcePrice = 0)
@@ -3608,13 +3622,9 @@ public unsafe partial class AutoRetainerWorkCustom
             var finalMarketPrice = marketPrice;
             if (forcePrice == 0)
             {
-                // 快速通道：若最低价改完后依旧在安全范围内，则直接短路，省去倒查和读取缓存的开销
-                if (GetModifiedPrice(itemConfig, marketPrice) < itemConfig.PriceMinimum)
+                if (PriceCacheManager.TryGetPricesCache(itemMarketData.Value.Item.itemID, itemMarketData.Value.Item.IsHQ, out var prices))
                 {
-                    if (PriceCacheManager.TryGetPricesCache(itemMarketData.Value.Item.itemID, itemMarketData.Value.Item.IsHQ, out var prices))
-                    {
-                        finalMarketPrice = GetFinalMarketPrice(itemConfig, prices);
-                    }
+                    finalMarketPrice = GetFinalMarketPrice(prices);
                 }
             }
 

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
-using System.Windows.Forms;
+using System.Runtime.InteropServices;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -15,7 +15,6 @@ using OmenTools;
 using OmenTools.Dalamud;
 using OmenTools.Dalamud.Helpers;
 using OmenTools.Extensions;
-using OmenTools.Interop.Windows.Helpers;
 using OmenTools.OmenService;
 using OmenTools.Threading;
 using IGameObject = OmenTools.Dalamud.Services.Game.Object.Abstractions.ObjectKinds.IGameObject;
@@ -67,16 +66,17 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
     private static readonly float[] CircleCoses = new float[40];
 
     // --- Air Force One 常量与状态字段 ---
-    private const int ShootInterval = 150;
-    private const int DedupExpiryMS = 400;
+    private const int NativeShotIntervalMS = 250;
+    private const int MaxTargetWalk = 128;
+    private const string FireCachedTargetSig = "48 8B C4 53 48 81 EC ?? ?? ?? ?? 0F 29 70 ?? 0F 57 C9 0F 29 78 ?? 48 8B D9 F3 0F 10 B9 ?? ?? ?? ?? BA FF FF 00 00";
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate nint FireCachedTargetDelegate(nint context);
 
     private bool wasInDuty;
     private AtkUnitBase* rideShootingAddon;
-    private readonly Dictionary<ulong, long> shotBalloons = [];
-    private ulong activeShotTargetID;
-    private long activeShotTime;
-
-    private readonly List<(IGameObject obj, float dist)> candidates = [];
+    private FireCachedTargetDelegate? fireCachedTarget;
+    private long lastShotAt;
 
     private static bool IsTelegraphVisible(long firstSeen) =>
         Environment.TickCount64 - firstSeen is >= 5000 and < 12000;
@@ -119,6 +119,15 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
         {
             OnAddonSetup(AddonEvent.PostSetup, null!);
         }
+
+        if (DService.Instance().SigScanner.TryScanText(FireCachedTargetSig, out var fireCachedTargetAddr))
+        {
+            fireCachedTarget = Marshal.GetDelegateForFunctionPointer<FireCachedTargetDelegate>(fireCachedTargetAddr);
+        }
+        else
+        {
+            DService.Instance().Log.Warning("[GoldSaucerGATEsHelper] Air Force One: FireCachedTarget signature scan failed. Auto-shooting disabled.");
+        }
     }
 
     protected override void Uninit()
@@ -139,9 +148,8 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
 
         wasInDuty = false;
         rideShootingAddon = null;
-        shotBalloons.Clear();
-        activeShotTargetID = 0;
-        activeShotTime = 0;
+        fireCachedTarget = null;
+        lastShotAt = 0;
     }
 
     private void OnTerritoryChanged(uint territory)
@@ -387,141 +395,74 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
         DService.Instance().Framework.Update -= OnFrameworkUpdate;
         rideShootingAddon = null;
         wasInDuty = false;
-        shotBalloons.Clear();
-        candidates.Clear();
+        lastShotAt = 0;
         DService.Instance().Log.Information("[GoldSaucerGATEsHelper] Exited Air Force One Duty. Unregistered framework update and cleaned states.");
     }
 
     private void OnFrameworkUpdate(Dalamud.Plugin.Services.IFramework framework)
     {
         if (rideShootingAddon == null || !rideShootingAddon->IsAddonAndNodesReady()) return;
+        if (fireCachedTarget == null) return;
 
-        var player = DService.Instance().ObjectTable.LocalPlayer;
-        if (player == null) return;
+        var now = Environment.TickCount64;
+        if (now - lastShotAt < NativeShotIntervalMS) return;
 
-        var gameGUI = DService.Instance().GameGUI;
+        var agent = AgentRideShooting.TryGet();
+        if (agent == null) return;
 
-        if (activeShotTargetID != 0)
-        {
-            if (Environment.TickCount64 - activeShotTime < 100)
-            {
-                var target = DService.Instance().ObjectTable.SearchByID(activeShotTargetID);
-                if (target != null && gameGUI.WorldToScreen(target.Position, out var screenPos))
-                {
-                    TrySetScreenAim(screenPos);
-                    return;
-                }
-            }
-            activeShotTargetID = 0;
-        }
+        var context = agent->GetContext();
+        if (context == 0) return;
 
-        candidates.Clear();
+        var target = FindBestTarget(context);
+        if (target == 0) return;
 
-        foreach (var x in DService.Instance().ObjectTable)
-        {
-            if (x.ObjectKind != ObjectKind.EventObj) continue;
+        *(Vector3*)(context + 0xCA0) = *(Vector3*)(target + 0x00);
+        *(int*)(context + 0xCB0) = 1;
+        *(ushort*)(context + 0xCB4) = *(ushort*)(target + 0x30);
 
-            var dataID = x.DataID;
-            var eventObj = (FFXIVClientStructs.FFXIV.Client.Game.Object.EventObject*)x.Address;
-
-            // 跳过爆弹怪，不作为射击目标
-            if (dataID is 2015183 or 2009679) continue;
-
-            if (dataID is 2009678 or 2009676 or 2009677 or 2015180 or 2015179 or 2015178)
-            {
-                if (eventObj->SharedTimelineState == 1)
-                {
-                    if (shotBalloons.TryGetValue(x.GameObjectID, out var shotTime))
-                    {
-                        if (Environment.TickCount64 - shotTime < DedupExpiryMS)
-                            continue;
-                    }
-                    var dist = Vector3.Distance(player.Position, x.Position);
-                    candidates.Add((x, dist));
-                }
-            }
-        }
-
-        candidates.Sort((a, b) => a.dist.CompareTo(b.dist));
-
-        IGameObject? bestTarget = null;
-        var bestScreen = Vector2.Zero;
-        var bestDist = 0f;
-
-        foreach (var (obj, dist) in candidates)
-        {
-            if (!gameGUI.WorldToScreen(obj.Position, out var targetScreen)) continue;
-
-            bestTarget = obj;
-            bestScreen = targetScreen;
-            bestDist = dist;
-            break;
-        }
-
-        if (bestTarget != null)
-        {
-            TrySetScreenAim(bestScreen);
-
-            if (Throttler.Shared.Throttle("AutoAirForceOne-Shoot", ShootInterval))
-            {
-                activeShotTargetID = bestTarget.GameObjectID;
-                activeShotTime = Environment.TickCount64;
-                shotBalloons[bestTarget.GameObjectID] = Environment.TickCount64;
-                
-                DService.Instance().Log.Information($"[GoldSaucerGATEsHelper] SHOOT: {bestTarget.Name} (ID={bestTarget.DataID}, ObjID={bestTarget.GameObjectID:X}) Pos={bestTarget.Position} Screen={bestScreen} Dist={bestDist:F1}y Candidates={candidates.Count}");
-
-                var shotFired = false;
-                var mountID = player.CurrentMount?.RowId ?? 0;
-                if (mountID > 0 && OmenTools.Interop.Game.Lumina.LuminaGetter.TryGetRow<Lumina.Excel.Sheets.Mount>(mountID, out var mountData))
-                {
-                    var actionID = mountData.MountAction.ValueNullable?.Action[0].RowId ?? 0;
-                    if (actionID > 0)
-                    {
-                        DService.Instance().Framework.RunOnTick(() =>
-                        {
-                            FFXIVClientStructs.FFXIV.Client.Game.ActionManager.Instance()->UseAction(FFXIVClientStructs.FFXIV.Client.Game.ActionType.Action, actionID);
-                        }, delayTicks: 1);
-                        shotFired = true;
-                    }
-                }
-
-                if (!shotFired)
-                {
-                    var stage = AtkStage.Instance();
-                    var isTyping = (stage != null && stage->AtkInputManager != null && stage->AtkInputManager->FocusedNode != null) || ImGui.GetIO().WantCaptureKeyboard;
-                    if (!isTyping)
-                    {
-                        DService.Instance().Framework.RunOnTick(() =>
-                        {
-                            KeyEmulationHelper.SendKeypress(Keys.Space);
-                        }, delayTicks: 1);
-                    }
-                }
-            }
-        }
+        fireCachedTarget.Invoke(context);
+        lastShotAt = now;
     }
 
-    private static bool TrySetScreenAim(Vector2 screen)
+    private static nint FindBestTarget(nint context)
     {
-        var agent = AgentRideShooting.TryGet();
-        var handler = agent != null ? agent->Handler : null;
-        if (handler == null || (nint)handler < 0x10000 || ((nint)handler & 7) != 0) return false;
+        var sentinel = *(nint*)(context + 0xC58);
+        if (sentinel == 0) return 0;
 
-        handler->AimScreenX = screen.X;
-        handler->AimScreenY = screen.Y;
-        return true;
+        nint best = 0;
+        var node = *(nint*)(sentinel + 0x00);
+
+        for (var i = 0; i < MaxTargetWalk && node != 0 && node != sentinel; i++, node = *(nint*)(node + 0x00))
+        {
+            var target = *(nint*)(node + 0x10);
+            if (target == 0) continue;
+
+            var kind = *(int*)(target + 0x4C);
+            var subState = *(int*)(target + 0x50);
+            var targetType = *(nint*)(target + 0x40);
+
+            if (kind != 2 || subState != 0 || targetType == 0) continue;
+
+            var score = *(short*)(targetType + 0x04);
+            if (score < 0) continue;
+
+            best = target;
+        }
+
+        return best;
     }
 
     #endregion
 
     #region Air Force One Interop Definitions
 
-    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 0x38)]
+    [StructLayout(LayoutKind.Explicit, Size = 0x38)]
     private struct AgentRideShooting
     {
-        [System.Runtime.InteropServices.FieldOffset(0x00)] public FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentInterface AgentInterface;
+        [FieldOffset(0x00)] public FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentInterface AgentInterface;
+        [FieldOffset(0x30)] public nint AddonEventInterface;
 
-        [System.Runtime.InteropServices.FieldOffset(0x30)] public RideShootingHandler* Handler;
+        public nint GetContext() => AddonEventInterface != 0 ? AddonEventInterface - 0x20 : 0;
 
         public static AgentRideShooting* TryGet()
         {
@@ -530,13 +471,6 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
 
             return (AgentRideShooting*)module->GetAgentByInternalId(FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentId.RideShooting);
         }
-    }
-
-    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 0xC78)]
-    private struct RideShootingHandler
-    {
-        [System.Runtime.InteropServices.FieldOffset(0xC70)] public float AimScreenX;
-        [System.Runtime.InteropServices.FieldOffset(0xC74)] public float AimScreenY;
     }
 
     #endregion
