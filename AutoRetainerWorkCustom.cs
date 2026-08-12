@@ -3954,13 +3954,21 @@ public unsafe partial class AutoRetainerWorkCustom
             // 检查每个条件
             foreach (var condition in PriceCheckConditions.GetAll())
             {
-                if (config.AbortLogic.Keys.Any(x => x.HasFlag(condition.Condition)) &&
-                    condition.Predicate(config, origPrice, modifiedPrice, marketPrice))
+                var hasBehavior = false;
+
+                foreach (var logic in config.AbortLogic)
                 {
-                    conditionMet   = condition.Condition;
-                    behaviorNeeded = config.AbortLogic.FirstOrDefault(x => x.Key.HasFlag(condition.Condition)).Value;
-                    return true;
+                    if ((logic.Key & condition.Condition) != condition.Condition) continue;
+
+                    behaviorNeeded = logic.Value;
+                    hasBehavior    = true;
+                    break;
                 }
+
+                if (!hasBehavior || !condition.Predicate(config, origPrice, modifiedPrice, marketPrice)) continue;
+
+                conditionMet = condition.Condition;
+                return true;
             }
 
             return false;
