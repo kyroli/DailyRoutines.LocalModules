@@ -67,7 +67,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
     public override ModuleInfo Info => new()
     {
         Title               = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "自动雇员作业(改)" : "Auto Retainer Work (Custom)",
-        Description         = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "基于官方同名模块修改，自动收取并重新派遣雇员。\n※ 增加了与雇员交互期间会自动开启“跳过对话”模块的功能。\n※ 增加了自动改价时的超低价格倒查过滤保护，防止因个例超低价导致改价异常。" : "Automatically collects and dispatches retainers.\n※ Added auto 'Skip Dialogue' when interacting with retainers.\n※ Added fallback protection for unusual low prices when auto adjusting market price.",
+        Description         = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "基于官方同名模块修改，自动收取并重新派遣雇员。\n※ 增加了与雇员交互期间会自动开启“跳过对话”模块的功能。\n※ 增加了自动改价时的断层超低价过滤保护，防止因个例错价导致改价异常。" : "Automatically collects and dispatches retainers.\n※ Added auto 'Skip Dialogue' when interacting with retainers.\n※ Added fallback protection for abnormal low prices when auto adjusting market price.",
         Category            = ModuleCategory.Interface,
         Author              = ["AtmoOmen", "nynpsu"],
         ReportURL           = "https://github.com/kyroli/DailyRoutines.LocalModules/issues",
@@ -3576,7 +3576,7 @@ public unsafe partial class AutoRetainerWorkCustom
             );
         }
 
-        private const double AnomalyDropRatio = 0.30;
+        private const double AnomalyDropRatio = 0.60;
         private const uint   AnomalyMinGap    = 5;
 
         /// <summary>
@@ -3596,7 +3596,7 @@ public unsafe partial class AutoRetainerWorkCustom
 
                 var gap = next - current;
 
-                // 如果相邻价格跌幅未达 30% 或绝对差额小于 5 Gil，说明 current 是合理的起始物价
+                // 如果相邻价格跌幅未达 60% 或绝对差额小于 5 Gil，说明 current 是合理的起始物价
                 if ((double)gap / next < AnomalyDropRatio || gap < AnomalyMinGap)
                     return current;
 
@@ -3638,15 +3638,15 @@ public unsafe partial class AutoRetainerWorkCustom
                     {
                         builder.AddText("检测到 ")
                                .Append(itemPayload)
-                               .AddText($" 存在意外超低价 {marketPrice.ToChineseString()}，已自动倒查并使用正常物价 {finalMarketPrice.ToChineseString()} 进行改价。");
+                               .AddText($" 存在异常超低价 {marketPrice.ToChineseString()}，已跳过并基于 {finalMarketPrice.ToChineseString()} 进行改价。");
                     }
                     else
                     {
-                        builder.AddText("Detected unusual low price ")
+                        builder.AddText("Detected abnormal low price ")
                                .AddText(marketPrice.ToChineseString())
                                .AddText(" for ")
                                .Append(itemPayload)
-                               .AddText($", automatically fallback to normal price {finalMarketPrice.ToChineseString()}.");
+                               .AddText($", skipped and adjusted based on {finalMarketPrice.ToChineseString()}.");
                     }
                     DService.Instance().Chat.Print(builder.Build());
                 }
