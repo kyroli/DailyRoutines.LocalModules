@@ -46,6 +46,8 @@ using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using KamiToolKit;
 using Lumina.Excel.Sheets;
+using OmenTools.Dalamud.Abstractions;
+using OmenTools.Dalamud.Attributes;
 using OmenTools.ImGuiOm.Widgets.Combos;
 using OmenTools.Info.Algorithms;
 using OmenTools.Info.Game.Data;
@@ -64,6 +66,15 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class AutoRetainerWorkCustom : ModuleBase
 {
+    [IPCSubscriber("DailyRoutines.Modules.BetterMarketBoard.SearchItem")]
+    private static IPCSubscriber<uint, bool> SearchItemIPC;
+
+    [IPCSubscriber("DailyRoutines.Modules.BetterMarketBoard.BeginMarketAdjustSession")]
+    private static IPCSubscriber<bool> BeginMarketAdjustSessionIPC;
+
+    [IPCSubscriber("DailyRoutines.Modules.BetterMarketBoard.EndMarketAdjustSession")]
+    private static IPCSubscriber<bool> EndMarketAdjustSessionIPC;
+
     public override ModuleInfo Info => new()
     {
         Title               = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "自动雇员作业(改)" : "Auto Retainer Work (Custom)",
@@ -71,7 +82,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
         Category            = ModuleCategory.Interface,
         Author              = ["AtmoOmen", "nynpsu"],
         ReportURL           = "https://github.com/kyroli/DailyRoutines.LocalModules/issues",
-        ModulesPrerequisite = ["AutoRefreshMarketSearchResult"]
+        ModulesPrerequisite = ["AutoRefreshMarketSearchResult", "BetterMarketBoard"]
     };
 
     private          Config            config            = null!;
@@ -1637,10 +1648,7 @@ public unsafe partial class AutoRetainerWorkCustom
         private          AbortBehavior  behaviorInput  = AbortBehavior.无;
         private          uint           itemModifyUnitPriceManual;
         private          uint           itemModifyCountManual;
-        private          Vector2        marketDataTableImageSize = new Vector2(32) * GlobalUIScale;
         private          Vector2        manualUnitPriceImageSize = new Vector2(32) * GlobalUIScale;
-
-        private KeyValuePair<uint, List<IMarketBoardHistoryListing>> historyListings;
 
         private bool          isNeedToDrawMarketListWindow;
         private bool          isNeedToDrawMarketUpshelfWindow;
@@ -1663,6 +1671,8 @@ public unsafe partial class AutoRetainerWorkCustom
             MoveToRetainerMarketHook.Enable();
             
             taskHelper ??= new() { TimeoutMS = 30_000, ShowDebug = true };
+            taskHelper.EnterBusyAction = BeginMarketAdjustSession;
+            taskHelper.LeaveBusyAction = EndMarketAdjustSession;
             taskHelper.TimeoutAction = () =>
             {
                 isNeedToDrawMarketListWindow = false;
@@ -1776,24 +1786,6 @@ public unsafe partial class AutoRetainerWorkCustom
 
             if (addon->X != (short)windowPos.X || addon->Y != (short)windowPos.Y)
                 addon->SetPosition((short)windowPos.X, (short)windowPos.Y);
-
-            if (InfoProxyItemSearch.Instance()->SearchItemId == 0) return;
-
-            ImGui.SetNextWindowSizeConstraints(new(200, 300), new(float.MaxValue));
-
-            if (ImGui.Begin("市场数据窗口##AutoRetainerWork-PriceAdjustWorker", ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoScrollbar))
-            {
-                DrawMarketDataTable();
-
-                if (historyListings.Key != 0 && historyListings.Value.Count > 0)
-                {
-                    ImGui.NewLine();
-
-                    DrawMarketHistoryDataTable();
-                }
-
-                ImGui.End();
-            }
         }
 
         private void DrawUpshelfWindow()
@@ -2948,215 +2940,6 @@ public unsafe partial class AutoRetainerWorkCustom
             }
         }
 
-        private void DrawMarketDataTable()
-        {
-            var info = InfoProxyItemSearch.Instance();
-            if (info == null) return;
-
-            if (info->SearchItemId == 0) return;
-
-            var listingsArray = info->Listings.ToArray()
-                                              .Where
-                                              (x => x.ItemId    == info->SearchItemId &&
-                                                    x.UnitPrice != 0                  &&
-                                                    !ParentModule.playerRetainers.Contains(x.RetainerId)
-                                              )
-                                              .OrderBy(x => x.UnitPrice)
-                                              .ToArray();
-
-            if (!LuminaGetter.TryGetRow<Item>(info->SearchItemId, out var itemData)) return;
-
-            var itemIcon = DService.Instance().Texture.GetFromGameIcon(new(itemData.Icon)).GetWrapOrDefault();
-            if (itemIcon == null) return;
-
-            
-
-            ImGui.Image(itemIcon.Handle, marketDataTableImageSize with { X = marketDataTableImageSize.Y });
-
-            ImGui.SameLine();
-
-            using (ImRaii.Group())
-            {
-                {
-                    ImGui.AlignTextToFramePadding();
-                    ImGui.TextUnformatted($"{itemData.Name}");
-                }
-
-                {
-                    ImGui.TextDisabled($"{DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-PriceAdjust-OnSaleCount")}: {info->ListingCount}");
-
-                    if (listingsArray.Length > 0)
-                    {
-                        var minPrice = listingsArray.Min(x => x.UnitPrice);
-                        ImGui.SameLine();
-                        ImGui.TextDisabled($" / {DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-PriceAdjust-MinPrice")}: {minPrice.ToChineseString()} / ");
-                        ImGuiOm.ClickToCopyAndNotify(minPrice.ToString());
-
-                        var maxPrice = listingsArray.Max(x => x.UnitPrice);
-                        ImGui.SameLine();
-                        ImGui.TextDisabled($"{DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-PriceAdjust-MaxPrice")}: {maxPrice.ToChineseString()}");
-                        ImGuiOm.ClickToCopyAndNotify(maxPrice.ToString());
-                    }
-                }
-            }
-
-            marketDataTableImageSize = ImGui.GetItemRectSize();
-
-            var       childSize = new Vector2(ImGui.GetContentRegionAvail().X, 250f * GlobalUIScale);
-            using var child     = ImRaii.Child("MarketDataChild", childSize, false, ImGuiWindowFlags.NoBackground);
-            if (!child) return;
-
-            var isAnyHQ              = listingsArray.Any(x => x.IsHqItem);
-            var isAnyOnMannequin     = listingsArray.Any(x => x.IsMannequin);
-            var isAnyMateriaEquipped = itemData.MateriaSlotCount > 0 && listingsArray.Any(x => x.MateriaCount > 0);
-
-            var columnsCount = 6;
-            if (!isAnyHQ)
-                columnsCount--;
-            if (!isAnyMateriaEquipped)
-                columnsCount--;
-            if (!isAnyOnMannequin)
-                columnsCount--;
-
-            using var table = ImRaii.Table("MarketBoardDataTable", columnsCount, ImGuiTableFlags.Borders);
-            if (!table) return;
-
-            if (isAnyHQ)
-                ImGui.TableSetupColumn("\ue03c", ImGuiTableColumnFlags.WidthFixed, ImGui.CalcTextSize("\ue03c").X);
-
-            if (isAnyMateriaEquipped)
-            {
-                var materiaText = LuminaWrapper.GetAddonText(1937);
-                ImGui.TableSetupColumn(materiaText, ImGuiTableColumnFlags.WidthFixed, ImGui.CalcTextSize(materiaText).X);
-            }
-
-            if (isAnyOnMannequin)
-                ImGui.TableSetupColumn(DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("Mannequin"), ImGuiTableColumnFlags.WidthFixed, ImGui.CalcTextSize(DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("Mannequin")).X);
-
-            ImGui.TableSetupColumn(LuminaWrapper.GetAddonText(357),  ImGuiTableColumnFlags.WidthStretch, 15);
-            ImGui.TableSetupColumn(DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("Amount"),               ImGuiTableColumnFlags.WidthFixed,   ImGui.CalcTextSize(DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("Amount")).X);
-            ImGui.TableSetupColumn(LuminaWrapper.GetAddonText(6936), ImGuiTableColumnFlags.WidthStretch, 15);
-
-            ImGui.TableHeadersRow();
-
-            foreach (var listing in listingsArray)
-            {
-                using var id = ImRaii.PushId(listing.ListingId.ToString());
-                ImGui.TableNextRow();
-
-                if (isAnyHQ)
-                {
-                    ImGui.TableNextColumn();
-                    ImGui.TextUnformatted(listing.IsHqItem ? "√" : string.Empty);
-                }
-
-                if (isAnyMateriaEquipped)
-                {
-                    ImGui.TableNextColumn();
-                    ImGui.TextUnformatted($"{listing.MateriaCount}");
-                }
-
-                if (isAnyOnMannequin)
-                {
-                    ImGui.TableNextColumn();
-                    ImGui.TextUnformatted(listing.IsMannequin ? "√" : string.Empty);
-                }
-
-                ImGui.TableNextColumn();
-                ImGui.TextUnformatted($"{listing.UnitPrice.ToChineseString()}");
-                ImGuiOm.ClickToCopyAndNotify(listing.UnitPrice.ToString());
-
-                ImGui.TableNextColumn();
-                ImGui.TextUnformatted($"{listing.Quantity}");
-
-                ImGui.TableNextColumn();
-                ImGui.TextUnformatted($"{(listing.UnitPrice * listing.Quantity + listing.TotalTax).ToChineseString()}");
-            }
-        }
-
-        private void DrawMarketHistoryDataTable()
-        {
-            var info = InfoProxyItemSearch.Instance();
-            if (info == null) return;
-
-            if (historyListings.Key == 0) return;
-            if (!LuminaGetter.TryGetRow<Item>(historyListings.Key, out _)) return;
-
-            
-
-            using (ImRaii.Group())
-            {
-                using (OmenTools.OmenService.FontManager.Instance().UIFont140.Push())
-                    ImGui.TextUnformatted($"{LuminaWrapper.GetAddonText(1165)}");
-
-                ImGui.TextDisabled($"{DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-PriceAdjust-OnSaleCount")}: {info->ListingCount}");
-
-                if (historyListings.Value.Count > 0)
-                {
-                    var minPrice = historyListings.Value.Min(x => x.SalePrice);
-                    ImGui.SameLine();
-                    ImGui.TextDisabled($" / {DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-PriceAdjust-MinPrice")}: {minPrice.ToChineseString()} / ");
-                    ImGuiOm.ClickToCopyAndNotify(minPrice.ToString());
-
-                    var maxPrice = historyListings.Value.Max(x => x.SalePrice);
-                    ImGui.SameLine();
-                    ImGui.TextDisabled($"{DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-PriceAdjust-MaxPrice")}: {maxPrice.ToChineseString()}");
-                    ImGuiOm.ClickToCopyAndNotify(maxPrice.ToString());
-                }
-            }
-
-            var       childSize = new Vector2(ImGui.GetContentRegionAvail().X, 250f * GlobalUIScale);
-            using var child     = ImRaii.Child("HistoryDataChild", childSize, false, ImGuiWindowFlags.NoBackground);
-            if (!child) return;
-
-            var isAnyHQ = historyListings.Value.Any(x => x.IsHq);
-
-            var columnsCount = 5;
-            if (!isAnyHQ)
-                columnsCount--;
-
-            using var table = ImRaii.Table("MarketBoardDataTable", columnsCount, ImGuiTableFlags.Borders);
-            if (!table) return;
-
-            if (isAnyHQ)
-                ImGui.TableSetupColumn("\ue03c", ImGuiTableColumnFlags.WidthFixed, ImGui.CalcTextSize("\ue03c").X);
-
-            ImGui.TableSetupColumn(DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("Amount"),               ImGuiTableColumnFlags.WidthFixed,   ImGui.CalcTextSize(DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("Amount")).X);
-            ImGui.TableSetupColumn(LuminaWrapper.GetAddonText(357),  ImGuiTableColumnFlags.WidthStretch, 15);
-            ImGui.TableSetupColumn(LuminaWrapper.GetAddonText(1975), ImGuiTableColumnFlags.WidthStretch, 15);
-            ImGui.TableSetupColumn(LuminaWrapper.GetAddonText(1976), ImGuiTableColumnFlags.WidthStretch, 15);
-
-            ImGui.TableHeadersRow();
-
-            foreach (var listing in historyListings.Value)
-            {
-                if (listing.OnMannequin) continue;
-
-                using var id = ImRaii.PushId($"{listing.BuyerName}-{listing.SalePrice}-{listing.Quantity}-{listing.PurchaseTime}");
-                ImGui.TableNextRow();
-
-                if (isAnyHQ)
-                {
-                    ImGui.TableNextColumn();
-                    ImGui.TextUnformatted(listing.IsHq ? "√" : string.Empty);
-                }
-
-                ImGui.TableNextColumn();
-                ImGui.TextUnformatted($"{listing.Quantity}");
-
-                ImGui.TableNextColumn();
-                ImGui.TextUnformatted($"{listing.SalePrice.ToChineseString()}");
-                ImGuiOm.ClickToCopyAndNotify(listing.SalePrice.ToString());
-
-                ImGui.TableNextColumn();
-                ImGui.TextUnformatted($"{listing.BuyerName}");
-                ImGuiOm.ClickToCopyAndNotify(listing.BuyerName);
-
-                ImGui.TableNextColumn();
-                ImGui.TextUnformatted($"{listing.PurchaseTime.ToLocalTime():yyyy/MM/dd HH:mm:ss}");
-            }
-        }
-
         private void DrawMarketUpshelf()
         {
             var manager = InventoryManager.Instance();
@@ -3290,14 +3073,8 @@ public unsafe partial class AutoRetainerWorkCustom
             PriceCacheManager.OnOfferingReceived(ParentModule, data);
 
         // 历史交易数据获取
-        private void OnHistoryReceived(IMarketBoardHistory history)
-        {
-            if (history.ItemId != historyListings.Key)
-                historyListings = new(history.ItemId, []);
-            historyListings.Value.AddRange(history.HistoryListings);
-
+        private static void OnHistoryReceived(IMarketBoardHistory history) =>
             PriceCacheManager.OnHistoryReceived(history);
-        }
 
         // 上架 => 全部拦截
         private void MoveToRetainerMarketDetour
@@ -3478,30 +3255,29 @@ public unsafe partial class AutoRetainerWorkCustom
 
                     if (!isPriceCached)
                     {
+                        var isNothingSearched = InfoProxyItemSearch.Instance()->SearchItemId == 0;
+
                         taskHelper.Enqueue
                         (
                             () =>
                             {
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return;
-                                var isNothingSearched = InfoProxyItemSearch.Instance()->SearchItemId == 0;
                                 RequestMarketItemData(itemID);
-                                if (isNothingSearched)
-                                    taskHelper.DelayNext(1000, "初始无数据, 等待 1 秒", 2);
                             },
                             IsCN ? $"请求雇员 {retainer->NameString} {slotIndex} 号位置处 {itemName} 的市场价格数据" : $"Requesting market price data for {itemName} at slot {slotIndex} of retainer {retainer->NameString}",
                             weight: 2
                         );
+                        if (isNothingSearched)
+                            taskHelper.DelayNext(1000, IsCN ? "初始无数据, 等待 1 秒" : "Initial no data, wait 1s", 2);
                         taskHelper.Enqueue
                         (
                             () =>
                             {
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return true;
-                                if (IsMarketStuck()) return false;
 
                                 return IsMarketItemDataReady(itemID);
                             },
                             IsCN ? $"等待 {itemName} 市场价格数据完全到达" : $"Wait for market price data of {itemName} to fully arrive",
-                            timeoutMS: 8000,
                             weight: 2
                         );
                         taskHelper.Enqueue
@@ -3509,49 +3285,13 @@ public unsafe partial class AutoRetainerWorkCustom
                             () =>
                             {
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return;
-                                
-                                // 初次获取不到价格数据，进行二次尝试
-                                if (!PriceCacheManager.TryGetPriceCache(itemID, isItemHQ, out price) || price == 0)
-                                {
-                                    RequestMarketItemData(itemID);
-                                    taskHelper.DelayNext(1000, IsCN ? "初次无数据, 尝试重新获取" : "Retrying market data request", 2);
-                                    
-                                    taskHelper.Enqueue
-                                    (
-                                        () =>
-                                        {
-                                            if (taskHelper.AbortByConflictKey(ParentModule)) return true;
-                                            if (IsMarketStuck()) return false;
-                                            return IsMarketItemDataReady(itemID);
-                                        },
-                                        IsCN ? "等待二次请求的数据完全到达" : "Wait for second request data",
-                                        timeoutMS: 8000,
-                                        weight: 2
-                                    );
-                                    
-                                    taskHelper.Enqueue
-                                    (
-                                        () =>
-                                        {
-                                            if (taskHelper.AbortByConflictKey(ParentModule)) return;
-                                            // 二次获取依然失败，直接放弃
-                                            if (!PriceCacheManager.TryGetPriceCache(itemID, isItemHQ, out price) || price == 0)
-                                            {
-                                                if (ParentModule.config.SendPriceAdjustProcessMessage)
-                                                    NotifyHelper.Instance().Chat(IsCN ? $"由于无法获取到 {itemName} 的有效市场价格，已跳过。" : $"Skipped price adjustment for {itemName} due to missing market data.");
-                                                return;
-                                            }
-                                            EnqueuePriceAdjustSingleItem(slotIndex, price, forcePrice);
-                                        },
-                                        IsCN ? "执行二次改价逻辑判定" : "Execute secondary price adjustment logic",
-                                        weight: 2
-                                    );
-                                    return;
-                                }
+                                // 什么价格数据都没有, 设置为 0
+                                if (!PriceCacheManager.TryGetPriceCache(itemID, isItemHQ, out price))
+                                    price = 0;
 
                                 EnqueuePriceAdjustSingleItem(slotIndex, price, forcePrice);
                             },
-                            IsCN ? "由单一物品改价接管后续逻辑" : "Single item price adjustment logic takes over",
+                            IsCN ? "由单一物品改价接管后续逻辑" : "Handled by single item adjust logic",
                             weight: 2
                         );
                         return;
@@ -3569,7 +3309,7 @@ public unsafe partial class AutoRetainerWorkCustom
                         if (modifiedPrice == 0 || modifiedPrice == itemMarketData.Value.Price) return;
                     }
 
-                    taskHelper.Enqueue(() => EnqueuePriceAdjustSingleItem(slotIndex, price, forcePrice), "由单一物品改价接管后续逻辑", weight: 2);
+                    taskHelper.Enqueue(() => EnqueuePriceAdjustSingleItem(slotIndex, price, forcePrice), IsCN ? "由单一物品改价接管后续逻辑" : "Handled by single item adjust logic", weight: 2);
                 },
                 IsCN ? $"检查当前市场第 {slotIndex} 栏的物品数据, 强制价格: {forcePrice}" : $"Check item data at slot {slotIndex}, forced price: {forcePrice}",
                 weight: 1
@@ -3864,19 +3604,24 @@ public unsafe partial class AutoRetainerWorkCustom
         }
 
         /// <summary>
+        ///     开启改价会话, 由 BetterMarketBoard 独占市场数据请求
+        /// </summary>
+        private static void BeginMarketAdjustSession() =>
+            BeginMarketAdjustSessionIPC.TryInvokeFunc();
+
+        /// <summary>
+        ///     结束改价会话
+        /// </summary>
+        private static void EndMarketAdjustSession() =>
+            EndMarketAdjustSessionIPC.TryInvokeFunc();
+
+        /// <summary>
         ///     获取当前市场物品数据
         /// </summary>
         private static void RequestMarketItemData(uint itemID)
         {
-            var proxy = InfoProxyItemSearch.Instance();
-            if (proxy == null) return;
-
-            proxy->EndRequest();
-            proxy->ClearListData();
-            proxy->EntryCount = 0;
-
-            proxy->SearchItemId = itemID;
-            proxy->RequestData();
+            if (InfoProxyItemSearch.Instance()->SearchItemId == itemID) return;
+            SearchItemIPC.TryInvokeFunc(itemID);
         }
 
         /// <summary>
@@ -3887,26 +3632,7 @@ public unsafe partial class AutoRetainerWorkCustom
             var proxy = InfoProxyItemSearch.Instance();
             if (proxy == null) return false;
 
-            if (proxy->SearchItemId != itemID)
-            {
-                RequestMarketItemData(itemID);
-                return false;
-            }
-
-            if (IsMarketStuck()) return false;
-
-            if (proxy->Listings.ToArray()
-                               .Where(x => x.ItemId == proxy->SearchItemId && x.UnitPrice != 0)
-                               .ToList().Count !=
-                proxy->ListingCount)
-                return false;
-
-            return proxy->EntryCount switch
-            {
-                > 10 => proxy->ListingCount >= 10,
-                0    => true,
-                _    => proxy->ListingCount != 0
-            };
+            return proxy->IsFullyReceived(itemID);
         }
 
         /// <summary>
@@ -4095,24 +3821,6 @@ public unsafe partial class AutoRetainerWorkCustom
 
             count = (uint)Math.Min(item.Quantity, upshelfLimit);
             return true;
-        }
-
-        /// <summary>
-        ///     当前市场是否正在重新请求
-        /// </summary>
-        /// <returns></returns>
-        private static bool IsMarketStuck()
-        {
-            try
-            {
-                return DService.Instance().PI
-                               .GetIpcSubscriber<bool>("DailyRoutines.Modules.AutoRefreshMarketSearchResult.IsMarketStuck")
-                               .InvokeFunc();
-            }
-            catch
-            {
-                return false;
-            }
         }
 
         #endregion
