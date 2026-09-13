@@ -69,16 +69,13 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
     [IPCSubscriber("DailyRoutines.Modules.BetterMarketBoard.SearchItem")]
     private static IPCSubscriber<uint, bool> SearchItemIPC;
 
-    [IPCSubscriber("DailyRoutines.Modules.BetterMarketBoard.BeginMarketAdjustSession")]
-    private static IPCSubscriber<bool> BeginMarketAdjustSessionIPC;
-
-    [IPCSubscriber("DailyRoutines.Modules.BetterMarketBoard.EndMarketAdjustSession")]
-    private static IPCSubscriber<bool> EndMarketAdjustSessionIPC;
+    [IPCSubscriber("DailyRoutines.Modules.BetterMarketBoard.ToggleOverlay")]
+    private static IPCSubscriber<bool?, bool> ToggleOverlayIPC;
 
     public override ModuleInfo Info => new()
     {
-        Title               = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "自动雇员作业(改)" : "Auto Retainer Work (Custom)",
-        Description         = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "基于官方同名模块修改，自动收取并重新派遣雇员。\n※ 增加了与雇员交互期间会自动开启“跳过对话”模块的功能。\n※ 增加了自动改价时的断层超低价过滤保护，防止因个例错价导致改价异常。" : "Automatically collects and dispatches retainers.\n※ Added auto 'Skip Dialogue' when interacting with retainers.\n※ Added fallback protection for abnormal low prices when auto adjusting market price.",
+        Title               = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "自动雇员作业(改)" : "Auto Retainer Work (Custom)",
+        Description         = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "基于官方同名模块修改，自动收取并重新派遣雇员。\n※ 增加了与雇员交互期间会自动开启“跳过对话”模块的功能。\n※ 增加了对市场孤立异常低价的过滤逻辑，防止因他人恶意压价或错价导致改价异常。" : "Automatically collects and dispatches retainers.\n※ Added auto 'Skip Dialogue' when interacting with retainers.\n※ Added filtering for isolated abnormal low prices when auto adjusting market price.",
         Category            = ModuleCategory.Interface,
         Author              = ["AtmoOmen", "nynpsu"],
         ReportURL           = "https://github.com/kyroli/DailyRoutines.LocalModules/issues",
@@ -95,7 +92,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
 
 
     private readonly RetainerWorkerBase[] workers;
-    private static bool IsCN => DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
+    private static bool IsCN => IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
 
     public AutoRetainerWorkCustom()
     {
@@ -122,9 +119,9 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
 
         addon ??= new(this);
 
-        DService.Instance().Condition.ConditionChange += OnConditionChanged;
+        ICondition.Instance().ConditionChange += OnConditionChanged;
 
-        if (DService.Instance().Condition[ConditionFlag.OccupiedSummoningBell])
+        if (ICondition.Instance()[ConditionFlag.OccupiedSummoningBell])
             OnConditionChanged(ConditionFlag.OccupiedSummoningBell, true);
     }
 
@@ -136,7 +133,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
         foreach (var worker in workers)
             worker.Uninit();
 
-        DService.Instance().Condition.ConditionChange -= OnConditionChanged;
+        ICondition.Instance().ConditionChange -= OnConditionChanged;
         DisableTalkSkipIfAutoEnabled();
     }
 
@@ -153,7 +150,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
         }
         else if ((flag == ConditionFlag.OccupiedSummoningBell || flag == ConditionFlag.Occupied) && !value)
         {
-            var cond = DService.Instance().Condition;
+            var cond = ICondition.Instance();
             if (!cond[ConditionFlag.OccupiedSummoningBell] && !cond[ConditionFlag.Occupied])
             {
                 DisableTalkSkipIfAutoEnabled();
@@ -608,13 +605,13 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
         {
             taskHelper ??= new() { TimeoutMS = 15_000 };
 
-            DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "RetainerItemTransferList",     OnEntrustDupsAddons);
-            DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "RetainerItemTransferProgress", OnEntrustDupsAddons);
+            IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, "RetainerItemTransferList",     OnEntrustDupsAddons);
+            IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, "RetainerItemTransferProgress", OnEntrustDupsAddons);
         }
 
         public override void Uninit()
         {
-            DService.Instance().AddonLifecycle.UnregisterListener(OnEntrustDupsAddons);
+            IAddonLifecycle.Instance().UnregisterListener(OnEntrustDupsAddons);
 
             taskHelper?.Abort();
             taskHelper?.Dispose();
@@ -817,13 +814,13 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
         {
             taskHelper ??= new() { TimeoutMS = 15_000, ShowDebug = true };
 
-            DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "RetainerList", OnRetainerList);
-            DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,  "RetainerList", OnRetainerList);
+            IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, "RetainerList", OnRetainerList);
+            IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostDraw,  "RetainerList", OnRetainerList);
         }
 
         public override void Uninit()
         {
-            DService.Instance().AddonLifecycle.UnregisterListener(OnRetainerList);
+            IAddonLifecycle.Instance().UnregisterListener(OnRetainerList);
 
             taskHelper?.Abort();
             taskHelper?.Dispose();
@@ -879,7 +876,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                     if (!ParentModule.config.AutoRetainerCollect) break;
                     if (!ParentModule.retainerThrottler.Throttle("AutoRetainerCollect-AFK", 5_000)) return;
 
-                    DService.Instance().Framework.RunOnTick
+                    IFramework.Instance().RunOnTick
                     (
                         () =>
                         {
@@ -916,7 +913,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                             () =>
                             {
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return true;
-                                DService.Instance().Framework.RunOnTick
+                                IFramework.Instance().RunOnTick
                                 (
                                     () =>
                                     {
@@ -1662,7 +1659,7 @@ public unsafe partial class AutoRetainerWorkCustom
 
         public override void Init()
         {
-            MoveToRetainerMarketHook ??= DService.Instance().Hook.HookFromMemberFunction
+            MoveToRetainerMarketHook ??= IGameInteropProvider.Instance().HookFromMemberFunction
             (
                 typeof(InventoryManager.MemberFunctionPointers),
                 "MoveToRetainerMarket",
@@ -1671,29 +1668,14 @@ public unsafe partial class AutoRetainerWorkCustom
             MoveToRetainerMarketHook.Enable();
             
             taskHelper ??= new() { TimeoutMS = 30_000, ShowDebug = true };
-            taskHelper.EnterBusyAction = BeginMarketAdjustSession;
-            taskHelper.LeaveBusyAction = EndMarketAdjustSession;
-            taskHelper.TimeoutAction = () =>
-            {
-                isNeedToDrawMarketListWindow = false;
-                isNeedToDrawMarketUpshelfWindow = false;
-                DService.Instance().Framework.RunOnTick(() =>
-                {
-                    var sellList = (AtkUnitBase*)DService.Instance().GameGUI.GetAddonByName("RetainerSellList").Address;
-                    if (sellList != null && sellList->IsVisible)
-                        sellList->Callback(-1);
-                    var sell = (AtkUnitBase*)DService.Instance().GameGUI.GetAddonByName("RetainerSell").Address;
-                    if (sell != null && sell->IsVisible)
-                        sell->Close(true);
-                });
-            };
+            taskHelper.EnterBusyAction = () => ToggleOverlayIPC.TryInvokeFunc(true);
 
-            DService.Instance().MarketBoard.HistoryReceived   += OnHistoryReceived;
-            DService.Instance().MarketBoard.OfferingsReceived += OnOfferingReceived;
+            IMarketBoard.Instance().HistoryReceived   += OnHistoryReceived;
+            IMarketBoard.Instance().OfferingsReceived += OnOfferingReceived;
 
-            DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup,   "RetainerSell",     OnRetainerSell);
-            DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostDraw,    "RetainerSellList", OnRetainerSellList);
-            DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "RetainerSellList", OnRetainerSellList);
+            IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup,   "RetainerSell",     OnRetainerSell);
+            IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostDraw,    "RetainerSellList", OnRetainerSellList);
+            IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "RetainerSellList", OnRetainerSellList);
 
             WindowManager.Instance().PostDraw += DrawMarketListWindow;
             WindowManager.Instance().PostDraw += DrawUpshelfWindow;
@@ -1813,8 +1795,8 @@ public unsafe partial class AutoRetainerWorkCustom
             MoveToRetainerMarketHook?.Dispose();
             MoveToRetainerMarketHook = null;
 
-            DService.Instance().AddonLifecycle.UnregisterListener(OnRetainerSell);
-            DService.Instance().AddonLifecycle.UnregisterListener(OnRetainerSellList);
+            IAddonLifecycle.Instance().UnregisterListener(OnRetainerSell);
+            IAddonLifecycle.Instance().UnregisterListener(OnRetainerSellList);
 
             WindowManager.Instance().PostDraw -= DrawMarketListWindow;
             isNeedToDrawMarketListWindow      =  false;
@@ -1822,8 +1804,8 @@ public unsafe partial class AutoRetainerWorkCustom
             WindowManager.Instance().PostDraw -= DrawUpshelfWindow;
             isNeedToDrawMarketUpshelfWindow   =  false;
 
-            DService.Instance().MarketBoard.HistoryReceived   -= OnHistoryReceived;
-            DService.Instance().MarketBoard.OfferingsReceived -= OnOfferingReceived;
+            IMarketBoard.Instance().HistoryReceived   -= OnHistoryReceived;
+            IMarketBoard.Instance().OfferingsReceived -= OnOfferingReceived;
 
             taskHelper?.Abort();
             taskHelper?.Dispose();
@@ -2235,7 +2217,7 @@ public unsafe partial class AutoRetainerWorkCustom
                                ? DailyRoutines.Common.Runtime.Hosts.ManagerHost.Current.GetLoc("AutoRetainerWork-PriceAdjust-CommonItemPreset")
                                : item.Name.ToString() ?? string.Empty;
 
-            var itemLogo = DService.Instance().Texture
+            var itemLogo = ITextureProvider.Instance()
                                    .GetFromGameIcon(new(selectedItemConfig.itemID == 0 ? 65002 : (uint)item.Icon, selectedItemConfig.IsHQ))
                                    .GetWrapOrDefault();
             if (itemLogo == null) return;
@@ -2721,7 +2703,7 @@ public unsafe partial class AutoRetainerWorkCustom
                 if (itemPrice == 0) continue;
 
                 var isItemHQ = item.Inventory.Flags.HasFlag(InventoryItem.ItemFlags.HighQuality);
-                var itemIcon = DService.Instance().Texture.GetFromGameIcon(new(item.Data.Icon, isItemHQ)).GetWrapOrDefault();
+                var itemIcon = ITextureProvider.Instance().GetFromGameIcon(new(item.Data.Icon, isItemHQ)).GetWrapOrDefault();
                 if (itemIcon == null) continue;
 
                 var itemName = $"{item.Data.Name.ToString()}" + (isItemHQ ? "\ue03c" : string.Empty);
@@ -2774,7 +2756,7 @@ public unsafe partial class AutoRetainerWorkCustom
             if (ImGui.IsItemHovered())
                 ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
             if (ImGui.IsItemClicked())
-                RequestMarketItemData(itemID);
+                RequestMarketItemData(itemID, true);
 
             using var popup = ImRaii.ContextPopupItem("MarketItemOperationPopup");
             if (!popup) return;
@@ -2811,7 +2793,7 @@ public unsafe partial class AutoRetainerWorkCustom
                     {
                         ImGui.CloseCurrentPopup();
 
-                        RequestMarketItemData(itemID);
+                        RequestMarketItemData(itemID, true);
                         isNeedOpenManualModifyPopup = true;
                     }
 
@@ -2827,7 +2809,7 @@ public unsafe partial class AutoRetainerWorkCustom
                         {
                             ImGui.CloseCurrentPopup();
 
-                            RequestMarketItemData(itemID);
+                            RequestMarketItemData(itemID, true);
                             isNeedOpenAllManualModifyPopup = true;
                         }
                     }
@@ -2955,7 +2937,7 @@ public unsafe partial class AutoRetainerWorkCustom
 
             var isItemHQ = slotData->Flags.HasFlag(InventoryItem.ItemFlags.HighQuality);
 
-            var itemIcon = DService.Instance().Texture
+            var itemIcon = ITextureProvider.Instance()
                                    .GetFromGameIcon(new(itemData.Icon, isItemHQ))
                                    .GetWrapOrDefault();
             if (itemIcon == null) return;
@@ -3027,7 +3009,7 @@ public unsafe partial class AutoRetainerWorkCustom
         private void OnRetainerSellList(AddonEvent type, AddonArgs args)
         {
             // 因为有模特存在
-            if (!DService.Instance().Condition[ConditionFlag.OccupiedSummoningBell]) return;
+            if (!ICondition.Instance()[ConditionFlag.OccupiedSummoningBell]) return;
 
             switch (type)
             {
@@ -3063,7 +3045,7 @@ public unsafe partial class AutoRetainerWorkCustom
         // 出售界面
         private static void OnRetainerSell(AddonEvent type, AddonArgs args)
         {
-            if (!DService.Instance().Condition[ConditionFlag.OccupiedSummoningBell]) return;
+            if (!ICondition.Instance()[ConditionFlag.OccupiedSummoningBell]) return;
             if (!args.Addon.ToStruct()->IsAddonAndNodesReady()) return;
             args.Addon.ToStruct()->Callback(0);
         }
@@ -3106,8 +3088,7 @@ public unsafe partial class AutoRetainerWorkCustom
             var info = InfoProxyItemSearch.Instance();
             if (info == null) return;
 
-            if (info->SearchItemId != slot->ItemId)
-                RequestMarketItemData(slot->ItemId);
+            RequestMarketItemData(slot->ItemId, true);
 
             upshelfUnitPriceInput = LuminaGetter.TryGetRow<Item>(slot->ItemId, out var itemRow) ? itemRow.PriceMid : 1;
             upshelfQuantityInput  = upshelfQuantity;
@@ -3185,21 +3166,10 @@ public unsafe partial class AutoRetainerWorkCustom
                             () =>
                             {
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return;
-                                if (RetainerSellList->IsAddonAndNodesReady())
-                                    RetainerSellList->Callback(-1);
+                                if (!RetainerSellList->IsAddonAndNodesReady()) return;
+                                RetainerSellList->Callback(-1);
                             },
-                            IsCN ? "单一雇员改价完成, 发出退出出售品列表界面指令" : "Single retainer price adjustment complete, exiting sell items list",
-                            timeoutMS: 5000
-                        );
-                        taskHelper.Enqueue
-                        (
-                            () =>
-                            {
-                                if (taskHelper.AbortByConflictKey(ParentModule)) return true;
-                                return !RetainerSellList->IsAddonAndNodesReady() && SelectString->IsAddonAndNodesReady();
-                            },
-                            IsCN ? "等待确认出售品列表已退出并回到交互菜单" : "Wait to confirm exiting sell items list and return to menu",
-                            timeoutMS: 5000
+                            IsCN ? "单一雇员改价完成, 退出出售品列表界面" : "Single retainer price adjustment complete, exiting sell items list"
                         );
                         taskHelper.Enqueue
                         (
@@ -3208,8 +3178,7 @@ public unsafe partial class AutoRetainerWorkCustom
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return true;
                                 return LeaveRetainer();
                             },
-                            IsCN ? "单一雇员改价完成, 返回至雇员列表界面" : "Single retainer price adjustment complete, return to retainer list",
-                            timeoutMS: 5000
+                            IsCN ? "单一雇员改价完成, 返回至雇员列表界面" : "Single retainer price adjustment complete, return to retainer list"
                         );
                     }
                 );
@@ -3262,7 +3231,7 @@ public unsafe partial class AutoRetainerWorkCustom
                             () =>
                             {
                                 if (taskHelper.AbortByConflictKey(ParentModule)) return;
-                                RequestMarketItemData(itemID);
+                                RequestMarketItemData(itemID, false);
                             },
                             IsCN ? $"请求雇员 {retainer->NameString} {slotIndex} 号位置处 {itemName} 的市场价格数据" : $"Requesting market price data for {itemName} at slot {slotIndex} of retainer {retainer->NameString}",
                             weight: 2
@@ -3297,18 +3266,6 @@ public unsafe partial class AutoRetainerWorkCustom
                         return;
                     }
 
-                    // 如果价格已经被缓存, 且价格不需要变化, 我们在此刻直接短路跳过它, 防止不必要的 Enqueue 占用时间
-                    var itemMarketData = GetRetainerMarketItem(slotIndex);
-                    if (itemMarketData != null)
-                    {
-                        var itemConfig = GetItemConfigByItemKey(itemMarketData.Value.Item);
-                        var finalPrice = price;
-                        if (forcePrice == 0 && PriceCacheManager.TryGetPricesCache(itemID, isItemHQ, out var cachedPrices))
-                            finalPrice = GetFinalMarketPrice(cachedPrices);
-                        var modifiedPrice = forcePrice > 0 ? forcePrice : GetModifiedPrice(itemConfig, finalPrice);
-                        if (modifiedPrice == 0 || modifiedPrice == itemMarketData.Value.Price) return;
-                    }
-
                     taskHelper.Enqueue(() => EnqueuePriceAdjustSingleItem(slotIndex, price, forcePrice), IsCN ? "由单一物品改价接管后续逻辑" : "Handled by single item adjust logic", weight: 2);
                 },
                 IsCN ? $"检查当前市场第 {slotIndex} 栏的物品数据, 强制价格: {forcePrice}" : $"Check item data at slot {slotIndex}, forced price: {forcePrice}",
@@ -3320,7 +3277,7 @@ public unsafe partial class AutoRetainerWorkCustom
         private const uint   AnomalyMinGap    = 5;
 
         /// <summary>
-        ///     倒查并过滤孤立砸盘超低物价，返回合理的当前市场最低价格
+        ///     过滤孤立的异常超低价格，返回合理的当前市场最低参考价
         /// </summary>
         private static uint GetFinalMarketPrice(List<uint> prices)
         {
@@ -3388,7 +3345,7 @@ public unsafe partial class AutoRetainerWorkCustom
                                .Append(itemPayload)
                                .AddText($", skipped and adjusted based on {finalMarketPrice.ToChineseString()}.");
                     }
-                    DService.Instance().Chat.Print(builder.Build());
+                    IChatGui.Instance().Print(builder.Build());
                 }
             }
 
@@ -3604,24 +3561,18 @@ public unsafe partial class AutoRetainerWorkCustom
         }
 
         /// <summary>
-        ///     开启改价会话, 由 BetterMarketBoard 独占市场数据请求
-        /// </summary>
-        private static void BeginMarketAdjustSession() =>
-            BeginMarketAdjustSessionIPC.TryInvokeFunc();
-
-        /// <summary>
-        ///     结束改价会话
-        /// </summary>
-        private static void EndMarketAdjustSession() =>
-            EndMarketAdjustSessionIPC.TryInvokeFunc();
-
-        /// <summary>
         ///     获取当前市场物品数据
         /// </summary>
-        private static void RequestMarketItemData(uint itemID)
+        private static void RequestMarketItemData
+        (
+            uint itemID,
+            bool openOverlay
+        )
         {
-            if (InfoProxyItemSearch.Instance()->SearchItemId == itemID) return;
-            SearchItemIPC.TryInvokeFunc(itemID);
+            if (InfoProxyItemSearch.Instance()->SearchItemId != itemID)
+                SearchItemIPC.TryInvokeFunc(itemID);
+            if (openOverlay)
+                ToggleOverlayIPC.TryInvokeFunc(true);
         }
 
         /// <summary>
@@ -3703,21 +3654,25 @@ public unsafe partial class AutoRetainerWorkCustom
         /// <summary>
         ///     获取修改后价格结果
         /// </summary>
-        private static uint GetModifiedPrice(ItemConfig config, uint marketPrice)
-        {
-            return config.AdjustBehavior switch
-            {
-                AdjustBehavior.固定值 => (uint)Math.Max(
-                    1L,
-                    (long)marketPrice - config.AdjustValues[AdjustBehavior.固定值]
-                ),
-                AdjustBehavior.百分比 => (uint)Math.Max(
-                    1L,
-                    (long)(marketPrice * (1.0 - config.AdjustValues[AdjustBehavior.百分比] / 100.0))
-                ),
-                _ => marketPrice
-            };
-        }
+        private static uint GetModifiedPrice
+        (
+            ItemConfig config,
+            uint       marketPrice
+        ) =>
+            (uint)(config.AdjustBehavior switch
+                      {
+                          AdjustBehavior.固定值 => Math.Max
+                          (
+                              0,
+                              marketPrice - config.AdjustValues[AdjustBehavior.固定值]
+                          ),
+                          AdjustBehavior.百分比 => Math.Max
+                          (
+                              0,
+                              marketPrice * (1 - (config.AdjustValues[AdjustBehavior.百分比] / 100))
+                          ),
+                          _ => marketPrice
+                      });
 
         /// <summary>
         ///     发送改价成功通知信息
@@ -3827,7 +3782,7 @@ public unsafe partial class AutoRetainerWorkCustom
 
         private static string GetLoc(AdjustBehavior behavior)
         {
-            var IsCN = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
+            var IsCN = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
             return behavior switch
             {
                 AdjustBehavior.固定值 => IsCN ? "固定值" : "Fixed Value",
@@ -3838,7 +3793,7 @@ public unsafe partial class AutoRetainerWorkCustom
 
         private static string GetLoc(AbortCondition condition)
         {
-            var IsCN = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
+            var IsCN = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
             List<string> names = [];
             foreach (AbortCondition c in Enum.GetValues<AbortCondition>())
             {
@@ -3862,7 +3817,7 @@ public unsafe partial class AutoRetainerWorkCustom
 
         private static string GetLoc(AbortBehavior behavior)
         {
-            var IsCN = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
+            var IsCN = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
             return behavior switch
             {
                 AbortBehavior.无 => IsCN ? "无" : "None",
@@ -3878,7 +3833,7 @@ public unsafe partial class AutoRetainerWorkCustom
 
         private static string GetLoc(SortOrder sortOrder)
         {
-            var IsCN = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
+            var IsCN = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
             return sortOrder switch
             {
                 SortOrder.上架顺序 => IsCN ? "上架顺序" : "Listing Order",

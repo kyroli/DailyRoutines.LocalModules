@@ -11,6 +11,7 @@ using Dalamud.Game;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Hooking;
 using Dalamud.Memory;
+using Dalamud.Plugin.Services;
 using Dalamud.Utility;
 
 using FFXIVClientStructs.FFXIV.Client.Game;
@@ -39,8 +40,8 @@ public unsafe class AutoQuestSay : ModuleBase
 {
     public override ModuleInfo Info => new()
     {
-        Title       = DService.Instance().ClientState.ClientLanguage == ClientLanguage.ChineseSimplified ? "自动任务说话" : "Auto Quest Say",
-        Description = DService.Instance().ClientState.ClientLanguage == ClientLanguage.ChineseSimplified ? "当任务目标要求在当前频道说出指定台词时，点击目标将自动在当前频道发送台词。" : "Automatically sends the required chat line when clicking on quest targets that require saying specific lines.",
+        Title       = IClientState.Instance().ClientLanguage == ClientLanguage.ChineseSimplified ? "自动任务说话" : "Auto Quest Say",
+        Description = IClientState.Instance().ClientLanguage == ClientLanguage.ChineseSimplified ? "当任务目标要求在当前频道说出指定台词时，点击目标将自动在当前频道发送台词。" : "Automatically sends the required chat line when clicking on quest targets that require saying specific lines.",
         Category    = ModuleCategory.General,
         Author      = ["nynpsu"],
         ReportURL   = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
@@ -65,9 +66,9 @@ public unsafe class AutoQuestSay : ModuleBase
 
     protected override void Init()
     {
-        Chat = DService.Instance().GetOmenService<ChatManager>();
+        Chat = ChatManager.Instance();
 
-        CurrentSayRegex = DService.Instance().ClientState.ClientLanguage switch
+        CurrentSayRegex = IClientState.Instance().ClientLanguage switch
         {
             ClientLanguage.Japanese => JapaneseRegex,
             ClientLanguage.English  => EnglishRegex,
@@ -76,7 +77,7 @@ public unsafe class AutoQuestSay : ModuleBase
             _                       => ChineseRegex
         };
 
-        InteractWithObjectHook ??= DService.Instance().Hook.HookFromMemberFunction<InteractWithObjectDelegate>(
+        InteractWithObjectHook ??= IGameInteropProvider.Instance().HookFromMemberFunction<InteractWithObjectDelegate>(
             typeof(TargetSystem.MemberFunctionPointers), "InteractWithObject", InteractWithObjectDetour);
         
         InteractWithObjectHook.Enable();
@@ -120,7 +121,7 @@ public unsafe class AutoQuestSay : ModuleBase
         if (obj == null || obj->ObjectKind is not (ObjectKind.EventNpc or ObjectKind.EventObj))
             return false;
 
-        var condition = DService.Instance().Condition;
+        var condition = ICondition.Instance();
         if (condition[ConditionFlag.BetweenAreas] || condition[ConditionFlag.OccupiedInCutSceneEvent])
             return false;
 
@@ -167,7 +168,7 @@ public unsafe class AutoQuestSay : ModuleBase
             if (!TryGetDialogueSheet(questID, out var dialogueSheet))
                 return string.Empty;
 
-            // 借鉴 NoTypeSay 算法核心：遍历所有可能的 SAY 节点与指引描述文本求交集匹配
+            // 遍历对话表中的候选台词节点，结合任务指引文本进行交叉匹配
             foreach (var qd in dialogueSheet!)
             {
                 if (qd.Value.IsEmpty) continue;
@@ -186,7 +187,7 @@ public unsafe class AutoQuestSay : ModuleBase
         }
         catch (Exception ex)
         {
-            DService.Instance().Log.Error(ex, $"AutoQuestSay: Failed to get say message for quest {questID}");
+            DLog.Error($"AutoQuestSay: Failed to get say message for quest {questID}", ex);
         }
 
         return string.Empty;
@@ -207,7 +208,7 @@ public unsafe class AutoQuestSay : ModuleBase
             var guidanceText = entry.Value.ToDalamudString().TextValue;
             var matches = CurrentSayRegex.Matches(guidanceText);
 
-            // NoTypeSay 算法精髓：判断当前指引句中被引号包裹的词汇，是否包含候选台词 candidateMessage
+            // 匹配指引文本中引号包裹的内容，检查是否包含候选台词
             if (matches.Any(m => m.Value.Contains(candidateMessage)))
                 return true;
         }
@@ -228,7 +229,7 @@ public unsafe class AutoQuestSay : ModuleBase
 
         if (!DialogueSheets.TryGetValue(sheetName, out dialogueSheet))
         {
-            dialogueSheet = DService.Instance().Data.GetExcelSheet<QuestDialogue>(name: sheetName);
+            dialogueSheet = IDataManager.Instance().GetExcelSheet<QuestDialogue>(name: sheetName);
             if (dialogueSheet != null)
                 DialogueSheets[sheetName] = dialogueSheet;
         }

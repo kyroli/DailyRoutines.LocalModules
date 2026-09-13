@@ -27,8 +27,8 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
 {
     public override ModuleInfo Info => new()
     {
-        Title = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "金碟机遇临门辅助" : "Gold Saucer GATEs Helper",
-        Description = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified 
+        Title = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "金碟机遇临门辅助" : "Gold Saucer GATEs Helper",
+        Description = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified 
             ? "1. 喷风中的幸存者：提示被吹飞概率最小的站位。\n2. 必中一闪快刀斩魔：显示竹子的倒向范围。\n3. 空军装甲驾驶员：自动瞄准并射击目标。\n※ 部分功能移植自 Saucy 插件。" 
             : "1. Any Way the Wind Blows: Shows safest spot.\n2. The Slice Is Right: Shows bamboo fall area.\n3. Air Force One: Automatically shoots targets.\n※ Partially based on Saucy.",
         Category = ModuleCategory.GoldSaucer,
@@ -109,41 +109,41 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
             CircleCoses[i] = MathF.Cos(angle);
         }
         
-        DService.Instance().ClientState.TerritoryChanged += OnTerritoryChanged;
-        OnTerritoryChanged(DService.Instance().ClientState.TerritoryType);
+        IClientState.Instance().TerritoryChanged += OnTerritoryChanged;
+        OnTerritoryChanged(IClientState.Instance().TerritoryType);
 
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "RideShooting", OnAddonSetup);
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "RideShooting", OnAddonFinalize);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, "RideShooting", OnAddonSetup);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "RideShooting", OnAddonFinalize);
 
         if (RideShooting != null && RideShooting->IsAddonAndNodesReady())
         {
             OnAddonSetup(AddonEvent.PostSetup, null!);
         }
 
-        if (DService.Instance().SigScanner.TryScanText(FireCachedTargetSig, out var fireCachedTargetAddr))
+        if (ISigScanner.Instance().TryScanText(FireCachedTargetSig, out var fireCachedTargetAddr))
         {
             fireCachedTarget = Marshal.GetDelegateForFunctionPointer<FireCachedTargetDelegate>(fireCachedTargetAddr);
         }
         else
         {
-            DService.Instance().Log.Warning("[GoldSaucerGATEsHelper] Air Force One: FireCachedTarget signature scan failed. Auto-shooting disabled.");
+            DLog.Warning("[GoldSaucerGATEsHelper] Air Force One: FireCachedTarget signature scan failed. Auto-shooting disabled.");
         }
     }
 
     protected override void Uninit()
     {
-        DService.Instance().ClientState.TerritoryChanged -= OnTerritoryChanged;
+        IClientState.Instance().TerritoryChanged -= OnTerritoryChanged;
         WindowManager.Instance().PostDraw -= OnDraw;
         objectSpawnTimes.Clear();
         activeSliceObjects.Clear();
         toRemoveList.Clear();
 
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonSetup);
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonFinalize);
+        IAddonLifecycle.Instance().UnregisterListener(OnAddonSetup);
+        IAddonLifecycle.Instance().UnregisterListener(OnAddonFinalize);
         
         if (wasInDuty)
         {
-            DService.Instance().Framework.Update -= OnFrameworkUpdate;
+            IFramework.Instance().Update -= OnFrameworkUpdate;
         }
 
         wasInDuty = false;
@@ -216,7 +216,7 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
         var onSpot  = distSq < 0.25f * 0.25f;
         var colour  = onSpot ? ColourWindGreen : ColourWindRed;
 
-        if (!DService.Instance().GameGUI.WorldToScreen(SafeSpot, out var screenPos)) return;
+        if (!IGameGui.Instance().WorldToScreen(SafeSpot, out var screenPos)) return;
         var drawList = ImGui.GetBackgroundDrawList();
         drawList.AddCircleFilled(screenPos, DotRadius, colour);
     }
@@ -291,7 +291,7 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
 
     private void DrawRectWorld(Vector3 origin, float rotation, float length, float width, uint colour)
     {
-        var gameGUI  = DService.Instance().GameGUI;
+        var gameGUI  = IGameGui.Instance();
         var drawList = ImGui.GetBackgroundDrawList();
         var io       = ImGui.GetIO();
         var displaySize = io.DisplaySize;
@@ -354,7 +354,7 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
 
     private void DrawFilledCircleWorld(Vector3 center, float radius, uint colour)
     {
-        var gameGUI  = DService.Instance().GameGUI;
+        var gameGUI  = IGameGui.Instance();
         var drawList = ImGui.GetBackgroundDrawList();
 
         var anyVisible = false;
@@ -385,18 +385,18 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
         rideShootingAddon = args != null ? (AtkUnitBase*)args.Addon.Address : RideShooting;
         if (rideShootingAddon == null) return;
 
-        DService.Instance().Framework.Update += OnFrameworkUpdate;
-        DService.Instance().Log.Information("[GoldSaucerGATEsHelper] Entered Air Force One GATE Duty! Registered framework update.");
+        IFramework.Instance().Update += OnFrameworkUpdate;
+        DLog.Debug("[GoldSaucerGATEsHelper] Entered Air Force One GATE Duty! Registered framework update.");
         wasInDuty = true;
     }
 
     private void OnAddonFinalize(AddonEvent type, AddonArgs args)
     {
-        DService.Instance().Framework.Update -= OnFrameworkUpdate;
+        IFramework.Instance().Update -= OnFrameworkUpdate;
         rideShootingAddon = null;
         wasInDuty = false;
         lastShotAt = 0;
-        DService.Instance().Log.Information("[GoldSaucerGATEsHelper] Exited Air Force One Duty. Unregistered framework update and cleaned states.");
+        DLog.Debug("[GoldSaucerGATEsHelper] Exited Air Force One Duty. Unregistered framework update and cleaned states.");
     }
 
     private void OnFrameworkUpdate(Dalamud.Plugin.Services.IFramework framework)

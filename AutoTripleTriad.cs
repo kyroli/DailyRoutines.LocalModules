@@ -34,8 +34,8 @@ public unsafe class AutoTripleTriad : ModuleBase
 
         public override ModuleInfo Info => new()
         {
-            Title = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "九宫幻卡自动化" : "Auto Triple Triad",
-            Description = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "自动与 NPC 进行九宫幻卡连续对战。\n支持直到集齐未拥有卡牌后停止、完成指定次数后停止，以及自动读取胜率最高的卡组。\n※ 本模块仅作交互辅助，【必须】配合并加载外部插件 TriadBuddy 才能正常工作。" : "Auto play Triple Triad matches continuously.\nSupports stopping after collecting all cards, reaching target count, and auto recommended deck.\n※ This is only an interaction helper. MUST load external plugin TriadBuddy to work.",
+            Title = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "九宫幻卡自动化" : "Auto Triple Triad",
+            Description = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "自动与 NPC 进行九宫幻卡连续对战。\n支持直到集齐未拥有卡牌后停止、完成指定次数后停止，以及自动读取胜率最高的卡组。\n※ 本模块仅作交互辅助，【必须】配合并加载外部插件 TriadBuddy 才能正常工作。" : "Auto play Triple Triad matches continuously.\nSupports stopping after collecting all cards, reaching target count, and auto recommended deck.\n※ This is only an interaction helper. MUST load external plugin TriadBuddy to work.",
             Category = ModuleCategory.GoldSaucer,
             Author = ["nynpsu"],
             ReportURL = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
@@ -170,19 +170,19 @@ public unsafe class AutoTripleTriad : ModuleBase
             config = LoadConfig<Config>() ?? new Config();
             reflectionFailed = false;
             isReflectionInitialized = false;
-            isCN = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
+            isCN = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
 
-            DService.Instance().Framework.Update += OnUpdate;
+            IFramework.Instance().Update += OnUpdate;
 
-            DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "TripleTriadRequest", OnTriadUIChange);
-            DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "TripleTriadSelDeck", OnTriadUIChange);
-            DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "TripleTriad", OnTriadUIChange);
-            DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "TripleTriadResult", OnTriadUIChange);
+            IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, "TripleTriadRequest", OnTriadUIChange);
+            IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, "TripleTriadSelDeck", OnTriadUIChange);
+            IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, "TripleTriad", OnTriadUIChange);
+            IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, "TripleTriadResult", OnTriadUIChange);
 
-            DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "TripleTriadRequest", OnTriadUIChange);
-            DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "TripleTriadSelDeck", OnTriadUIChange);
-            DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "TripleTriad", OnTriadUIChange);
-            DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "TripleTriadResult", OnTriadUIChange);
+            IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "TripleTriadRequest", OnTriadUIChange);
+            IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "TripleTriadSelDeck", OnTriadUIChange);
+            IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "TripleTriad", OnTriadUIChange);
+            IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "TripleTriadResult", OnTriadUIChange);
 
             if (CheckAnyTriadUIOpen())
             {
@@ -192,8 +192,8 @@ public unsafe class AutoTripleTriad : ModuleBase
 
         protected override void Uninit()
         {
-            DService.Instance().Framework.Update -= OnUpdate;
-            DService.Instance().AddonLifecycle.UnregisterListener(OnTriadUIChange);
+            IFramework.Instance().Update -= OnUpdate;
+            IAddonLifecycle.Instance().UnregisterListener(OnTriadUIChange);
             
             isTriadUIActive = false;
             isInMatch = false;
@@ -288,7 +288,7 @@ public unsafe class AutoTripleTriad : ModuleBase
                 triadNPCIDField = triadNpcType.GetField("Id", instanceFlags);
                 gameNPCInfoRewardCardsField = gameNpcInfoType.GetField("rewardCards", instanceFlags);
 
-                // 核心反射字段必须全部获取成功
+                // 验证必需的反射字段与属性
                 if (solverGameCurrentNPCField == null || solverGameHasErrorsProp == null || solverGameHasMoveField == null ||
                     solverGameMoveCardIdxField == null || solverGameMoveBoardIdxField == null ||
                     solverPreGameNPCField == null || solverPreGameProgressProp == null || solverPreGameBestIDField == null ||
@@ -296,7 +296,7 @@ public unsafe class AutoTripleTriad : ModuleBase
                     triadNPCIDField == null ||
                     gameNPCInfoRewardCardsField == null)
                 {
-                    DService.Instance().Log.Warning("AutoTripleTriad: 反射获取 TriadBuddy 核心字段失败，已触发熔断拦截。");
+                    DLog.Warning("AutoTripleTriad: 获取 TriadBuddy 必需字段失败，已中止自动处理。");
                     return false;
                 }
 
@@ -306,7 +306,7 @@ public unsafe class AutoTripleTriad : ModuleBase
             }
             catch (Exception ex)
             {
-                DService.Instance().Log.Warning($"AutoTripleTriad: 反射初始化异常: {ex.Message}，已触发熔断拦截。");
+                DLog.Warning($"AutoTripleTriad: 反射初始化异常: {ex.Message}，已中止自动处理。");
                 return false;
             }
         }
@@ -316,10 +316,10 @@ public unsafe class AutoTripleTriad : ModuleBase
             if (config == null) return;
             if (!isTriadUIActive && !wasAnyTriadUIOpen) return;
 
-            var prepAddon = (AtkUnitBase*)DService.Instance().GameGUI.GetAddonByName("TripleTriadRequest").Address;
-            var selDeckAddon = (AtkUnitBase*)DService.Instance().GameGUI.GetAddonByName("TripleTriadSelDeck").Address;
-            var gameAddon = (AtkUnitBase*)DService.Instance().GameGUI.GetAddonByName("TripleTriad").Address;
-            var resultAddon = (AtkUnitBase*)DService.Instance().GameGUI.GetAddonByName("TripleTriadResult").Address;
+            var prepAddon = (AtkUnitBase*)IGameGui.Instance().GetAddonByName("TripleTriadRequest").Address;
+            var selDeckAddon = (AtkUnitBase*)IGameGui.Instance().GetAddonByName("TripleTriadSelDeck").Address;
+            var gameAddon = (AtkUnitBase*)IGameGui.Instance().GetAddonByName("TripleTriad").Address;
+            var resultAddon = (AtkUnitBase*)IGameGui.Instance().GetAddonByName("TripleTriadResult").Address;
 
             bool isPrepOpen = prepAddon != null && prepAddon->IsVisible;
             bool isSelDeckOpen = selDeckAddon != null && selDeckAddon->IsVisible;
@@ -392,7 +392,7 @@ public unsafe class AutoTripleTriad : ModuleBase
 
             if (!config.EnableTripleTriad) return;
 
-            if (DService.Instance().ClientState.IsPvP) return;
+            if (IClientState.Instance().IsPvP) return;
 
             UpdateGameState();
             
@@ -425,10 +425,10 @@ public unsafe class AutoTripleTriad : ModuleBase
 
         private bool CheckAnyTriadUIOpen()
         {
-            var prepAddon = (AtkUnitBase*)DService.Instance().GameGUI.GetAddonByName("TripleTriadRequest").Address;
-            var selDeckAddon = (AtkUnitBase*)DService.Instance().GameGUI.GetAddonByName("TripleTriadSelDeck").Address;
-            var gameAddon = (AtkUnitBase*)DService.Instance().GameGUI.GetAddonByName("TripleTriad").Address;
-            var resultAddon = (AtkUnitBase*)DService.Instance().GameGUI.GetAddonByName("TripleTriadResult").Address;
+            var prepAddon = (AtkUnitBase*)IGameGui.Instance().GetAddonByName("TripleTriadRequest").Address;
+            var selDeckAddon = (AtkUnitBase*)IGameGui.Instance().GetAddonByName("TripleTriadSelDeck").Address;
+            var gameAddon = (AtkUnitBase*)IGameGui.Instance().GetAddonByName("TripleTriad").Address;
+            var resultAddon = (AtkUnitBase*)IGameGui.Instance().GetAddonByName("TripleTriadResult").Address;
 
             return (prepAddon != null && prepAddon->IsVisible) ||
                    (selDeckAddon != null && selDeckAddon->IsVisible) ||
@@ -438,7 +438,7 @@ public unsafe class AutoTripleTriad : ModuleBase
 
         private unsafe void ProcessSelectString()
         {
-            var addon = (AtkUnitBase*)DService.Instance().GameGUI.GetAddonByName("SelectString").Address;
+            var addon = (AtkUnitBase*)IGameGui.Instance().GetAddonByName("SelectString").Address;
             if (addon != null && addon->IsVisible && addon->UldManager.NodeListCount > 0)
             {
                 if (Environment.TickCount64 - lastSelectStringTime < 1000) return;
@@ -448,7 +448,7 @@ public unsafe class AutoTripleTriad : ModuleBase
                 {
                     config.EnableTripleTriad = false;
                     SaveConfig(config);
-                    DService.Instance().Chat.Print(GetLoc("DoneCount"));
+                    IChatGui.Instance().Print(GetLoc("DoneCount"));
 
                     var selectString = (FFXIVClientStructs.FFXIV.Client.UI.AddonSelectString*)addon;
                     var popupMenu = (FFXIVClientStructs.FFXIV.Client.UI.PopupMenu*)((byte*)selectString + 0x238);
@@ -466,7 +466,7 @@ public unsafe class AutoTripleTriad : ModuleBase
 
         private unsafe void ProcessTripleTriadResult()
         {
-            var addonResult = (AtkUnitBase*)DService.Instance().GameGUI.GetAddonByName("TripleTriadResult").Address;
+            var addonResult = (AtkUnitBase*)IGameGui.Instance().GetAddonByName("TripleTriadResult").Address;
             if (addonResult != null && addonResult->IsVisible)
             {
                 if (!isResultShown)
@@ -529,7 +529,7 @@ public unsafe class AutoTripleTriad : ModuleBase
                                         
                                         if (allCardsOwned)
                                         {
-                                            DService.Instance().Chat.Print(GetLoc("DoneCol"));
+                                            IChatGui.Instance().Print(GetLoc("DoneCol"));
                                             shouldStop = true;
                                         }
                                     }
@@ -539,13 +539,13 @@ public unsafe class AutoTripleTriad : ModuleBase
                     }
                     catch (Exception ex)
                     {
-                        DService.Instance().Chat.PrintError($"{GetLoc("ErrCheck")}{ex.Message}");
-                        DService.Instance().Log.Error(ex, "AutoTripleTriad: 检查全收集状态失败");
+                        IChatGui.Instance().PrintError($"{GetLoc("ErrCheck")}{ex.Message}");
+                        DLog.Error("AutoTripleTriad: 检查全收集状态失败", ex);
                     }
                 }
                 else if (config.PlayXTimes && matchCount >= config.TimesToPlay)
                 {
-                    DService.Instance().Chat.Print(GetLoc("DoneCount"));
+                    IChatGui.Instance().Print(GetLoc("DoneCount"));
                     shouldStop = true;
                 }
 
@@ -615,7 +615,7 @@ public unsafe class AutoTripleTriad : ModuleBase
                             var rewardCards = (System.Collections.IEnumerable)gameNPCInfoRewardCardsField!.GetValue(npcInfo)!;
                             if (rewardCards == null) return;
                             
-                            var sheet = DService.Instance().Data.GetExcelSheet<TripleTriadCard>();
+                            var sheet = IDataManager.Instance().GetExcelSheet<TripleTriadCard>();
                             
                             foreach (int cardID in rewardCards)
                             {
@@ -639,14 +639,14 @@ public unsafe class AutoTripleTriad : ModuleBase
             }
             catch (Exception ex)
             {
-                DService.Instance().Chat.PrintError($"{GetLoc("ErrDrop")}{ex.Message}");
-                DService.Instance().Log.Error(ex, "AutoTripleTriad: 获取NPC卡牌掉落失败");
+                IChatGui.Instance().PrintError($"{GetLoc("ErrDrop")}{ex.Message}");
+                DLog.Error("AutoTripleTriad: 获取NPC卡牌掉落失败", ex);
             }
         }
 
         private unsafe void UpdateGameState()
         {
-            var addonGame = (AtkUnitBase*)DService.Instance().GameGUI.GetAddonByName("TripleTriad").Address;
+            var addonGame = (AtkUnitBase*)IGameGui.Instance().GetAddonByName("TripleTriad").Address;
             if (addonGame != null && addonGame->IsVisible)
             {
                 isInMatch = true;
@@ -671,7 +671,7 @@ public unsafe class AutoTripleTriad : ModuleBase
                     {
                         lastRequestTime = Environment.TickCount64;
                         var status = solverGameStatusField?.GetValue(externalSolverGame);
-                        DService.Instance().Chat.Print($"{GetLoc("ErrBlock")}{status}");
+                        IChatGui.Instance().Print($"{GetLoc("ErrBlock")}{status}");
                     }
                     return;
                 }
@@ -682,7 +682,7 @@ public unsafe class AutoTripleTriad : ModuleBase
                     var move = (int)solverGameMoveCardIdxField!.GetValue(externalSolverGame)!;
                     var pos = (int)solverGameMoveBoardIdxField!.GetValue(externalSolverGame)!;
 
-                    var addon = (FFXIVClientStructs.FFXIV.Client.UI.AddonTripleTriad*)DService.Instance().GameGUI.GetAddonByName("TripleTriad").Address;
+                    var addon = (FFXIVClientStructs.FFXIV.Client.UI.AddonTripleTriad*)IGameGui.Instance().GetAddonByName("TripleTriad").Address;
                     if (addon == null) return;
                     
                     var values = stackalloc AtkValue[2];
@@ -698,15 +698,15 @@ public unsafe class AutoTripleTriad : ModuleBase
             }
             catch (Exception ex)
             {
-                DService.Instance().Chat.PrintError($"{GetLoc("ErrInvoke")}{ex.Message}");
-                DService.Instance().Log.Error(ex, "AutoTripleTriad: 自动出牌反射调用失败");
+                IChatGui.Instance().PrintError($"{GetLoc("ErrInvoke")}{ex.Message}");
+                DLog.Error("AutoTripleTriad: 自动出牌反射调用失败", ex);
                 config.EnableTripleTriad = false;
             }
         }
 
         private unsafe void ProcessRequest()
         {
-            var addon = (AtkUnitBase*)DService.Instance().GameGUI.GetAddonByName("TripleTriadRequest").Address;
+            var addon = (AtkUnitBase*)IGameGui.Instance().GetAddonByName("TripleTriadRequest").Address;
             if (addon != null && addon->IsVisible)
             {
                 if (Environment.TickCount64 - lastRequestTime < 1000) return;
@@ -718,7 +718,7 @@ public unsafe class AutoTripleTriad : ModuleBase
 
         private unsafe void ProcessSelDeck()
         {
-            var addon = (AtkUnitBase*)DService.Instance().GameGUI.GetAddonByName("TripleTriadSelDeck").Address;
+            var addon = (AtkUnitBase*)IGameGui.Instance().GetAddonByName("TripleTriadSelDeck").Address;
             if (addon != null && addon->IsVisible)
             {
                 if (Environment.TickCount64 - lastSelDeckTime < 1000) return;
@@ -742,8 +742,8 @@ public unsafe class AutoTripleTriad : ModuleBase
                     }
                     catch (Exception ex)
                     {
-                        DService.Instance().Chat.PrintError($"{GetLoc("ErrRec")}{ex.Message}");
-                        DService.Instance().Log.Error(ex, "AutoTripleTriad: 读取推荐卡组失败");
+                        IChatGui.Instance().PrintError($"{GetLoc("ErrRec")}{ex.Message}");
+                        DLog.Error("AutoTripleTriad: 读取推荐卡组失败", ex);
                     }
                 }
                 
@@ -759,7 +759,7 @@ public unsafe class AutoTripleTriad : ModuleBase
                 "StopAuto" => IsCN ? "停止自动打牌" : "Stop Auto Play",
                 "Status" => IsCN ? "状态：自动打牌中 (已战 " : "Status: Auto Playing (Matches played: ",
                 "StatusEnd" => IsCN ? " 场)" : ")",
-                "Hint" => IsCN ? "提示：请点击游戏原生的【挑战】按钮开始自动挂机。" : "Hint: Please click the in-game [Challenge] button to start auto-farming.",
+                "Hint" => IsCN ? "提示：请点击游戏原生的【挑战】按钮开始自动对战。" : "Hint: Please click the in-game [Challenge] button to start auto-farming.",
                 "StopAllCol" => IsCN ? "直到集齐该 NPC 所有未拥有卡牌后停止" : "Stop when all unowned cards from this NPC are collected",
                 "PlayX" => IsCN ? "挑战指定次数" : "Play a specific number of times",
                 "TargetX" => IsCN ? "目标挑战次数" : "Target match count",
@@ -793,7 +793,7 @@ public unsafe class AutoTripleTriad : ModuleBase
             }
             catch (Exception ex)
             {
-                DService.Instance().Log.Error(ex, $"AutoTripleTriad: 手册卡牌解锁检查失败 cardID={cardID}");
+                DLog.Error($"AutoTripleTriad: 手册卡牌解锁检查失败 cardID={cardID}", ex);
             }
 
             try
@@ -810,7 +810,7 @@ public unsafe class AutoTripleTriad : ModuleBase
             }
             catch (Exception ex)
             {
-                DService.Instance().Log.Error(ex, $"AutoTripleTriad: 背包卡牌检查失败 cardID={cardID}");
+                DLog.Error($"AutoTripleTriad: 背包卡牌检查失败 cardID={cardID}", ex);
             }
 
             return false;
@@ -824,7 +824,7 @@ public unsafe class AutoTripleTriad : ModuleBase
 
             try
             {
-                var itemSheet = DService.Instance().Data.GetExcelSheet<Item>();
+                var itemSheet = IDataManager.Instance().GetExcelSheet<Item>();
                 if (itemSheet == null) return;
 
                 foreach (var itemRow in itemSheet)
@@ -845,11 +845,11 @@ public unsafe class AutoTripleTriad : ModuleBase
                         // 忽略单个非卡牌物品的解析异常
                     }
                 }
-                DService.Instance().Log.Debug($"AutoTripleTriad: 卡牌物品映射初始化完成，加载 {cardToItemMap.Count} 项");
+                DLog.Debug($"AutoTripleTriad: 卡牌物品映射初始化完成，加载 {cardToItemMap.Count} 项");
             }
             catch (Exception ex)
             {
-                DService.Instance().Log.Error(ex, "AutoTripleTriad: 初始化卡牌物品映射失败");
+                DLog.Error("AutoTripleTriad: 初始化卡牌物品映射失败", ex);
             }
         }
     }

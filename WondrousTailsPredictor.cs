@@ -11,12 +11,15 @@ using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Memory;
+using Dalamud.Plugin.Services;
 
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 
 using OmenTools;
+using OmenTools.Dalamud;
+using OmenTools.Extensions;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -24,8 +27,8 @@ public unsafe class WondrousTailsPredictor : ModuleBase
 {
     public override ModuleInfo Info => new()
     {
-        Title       = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "天书连线概率" : "Wondrous Tails Predictor",
-        Description = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "在天书界面实时计算并显示连线概率，辅助洗牌决策。" : "Calculates and displays line probabilities in Wondrous Tails, assisting with shuffle decisions.",
+        Title       = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "天书连线概率" : "Wondrous Tails Predictor",
+        Description = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "在天书界面实时计算并显示连线概率，辅助洗牌决策。" : "Calculates and displays line probabilities in Wondrous Tails, assisting with shuffle decisions.",
         Category    = ModuleCategory.Interface,
         Author      = ["nynpsu"],
         ReportURL   = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
@@ -86,12 +89,12 @@ public unsafe class WondrousTailsPredictor : ModuleBase
 
     protected override void Init()
     {
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "WeeklyBingo", OnAddonEvent);
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "WeeklyBingo", OnAddonEvent);
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostRefresh, "WeeklyBingo", OnAddonEvent);
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostUpdate, "WeeklyBingo", OnAddonEvent);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, "WeeklyBingo", OnAddonEvent);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "WeeklyBingo", OnAddonEvent);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRefresh, "WeeklyBingo", OnAddonEvent);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostUpdate, "WeeklyBingo", OnAddonEvent);
         
-        LocStrings = DService.Instance().ClientState.ClientLanguage switch
+        LocStrings = IClientState.Instance().ClientLanguage switch
         {
             Dalamud.Game.ClientLanguage.ChineseSimplified => ("当前", "线"),
             _ => ("Current", " Line(s)")
@@ -105,7 +108,7 @@ public unsafe class WondrousTailsPredictor : ModuleBase
 
     protected override void Uninit()
     {
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddonEvent);
+        IAddonLifecycle.Instance().UnregisterListener(OnAddonEvent);
         RestoreAddon();
     }
 
@@ -132,13 +135,13 @@ public unsafe class WondrousTailsPredictor : ModuleBase
         }
         catch (Exception ex)
         {
-            DService.Instance().Log.Error(ex, "WondrousTailsPredictor exception in OnAddonEvent");
+            DLog.Error("WondrousTailsPredictor exception in OnAddonEvent", ex);
         }
     }
 
     private void RefreshAddon()
     {
-        var ptr = DService.Instance().GameGUI.GetAddonByName("WeeklyBingo").Address;
+        var ptr = IGameGui.Instance().GetAddonByName("WeeklyBingo").Address;
         if (ptr != nint.Zero)
         {
             PrevMask = 0xFFFF;
@@ -148,7 +151,7 @@ public unsafe class WondrousTailsPredictor : ModuleBase
 
     private void RestoreAddon()
     {
-        var ptr = DService.Instance().GameGUI.GetAddonByName("WeeklyBingo").Address;
+        var ptr = IGameGui.Instance().GetAddonByName("WeeklyBingo").Address;
         if (ptr == nint.Zero) return;
         
         var addon = (AddonWeeklyBingo*)ptr;

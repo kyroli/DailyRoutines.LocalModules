@@ -8,6 +8,7 @@ using DailyRoutines.Extensions;
 using Dalamud.Game;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+using Dalamud.Plugin.Services;
 using OmenTools;
 using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Dalamud;
@@ -24,8 +25,8 @@ public class AutoJumboCactpotCustom : ModuleBase
 {
     public override ModuleInfo Info => new()
     {
-        Title       = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "自动每周仙人仙彩(改)" : "Auto Jumbo Cactpot (Custom)",
-        Description = DService.Instance().ClientState.ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "基于官方同名模块修改，自动购买并选择每周仙人仙彩号码。\n※ 增加了“一号多买”模式：首张票随机生成，后续票自动沿用该号码。" : "Automatically purchases and selects Jumbo Cactpot numbers.\n※ Added 'Synchronized' mode: first ticket is random, rest copy the first.",
+        Title       = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "自动每周仙人仙彩(改)" : "Auto Jumbo Cactpot (Custom)",
+        Description = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "基于官方同名模块修改，自动购买并选择每周仙人仙彩号码。\n※ 增加了“一号多买”模式：首张票随机生成，后续票自动沿用该号码。" : "Automatically purchases and selects Jumbo Cactpot numbers.\n※ Added 'Synchronized' mode: first ticket is random, rest copy the first.",
         Category    = ModuleCategory.GoldSaucer,
         Author      = ["AtmoOmen", "nynpsu"],
         ReportURL   = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
@@ -45,7 +46,7 @@ public class AutoJumboCactpotCustom : ModuleBase
     {
         config = LoadConfig<Config>() ?? new();
 
-        Loc = DService.Instance().ClientState.ClientLanguage switch
+        Loc = IClientState.Instance().ClientLanguage switch
         {
             Dalamud.Game.ClientLanguage.ChineseSimplified => new(
                 "选号模式", "完全随机", "固定号码", "一号多买", "指定号码", "(首张随机，后续自动沿用)"),
@@ -62,14 +63,14 @@ public class AutoJumboCactpotCustom : ModuleBase
 
         TaskHelper ??= new() { TimeoutMS = 5_000 };
 
-        DService.Instance().AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "LotteryWeeklyInput", OnAddon);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, "LotteryWeeklyInput", OnAddon);
         
-        if (LotteryWeeklyInput != null && AtkUnitBaseExtension.IsAddonAndNodesReady(ref *LotteryWeeklyInput))
+        if (LotteryWeeklyInput->IsAddonAndNodesReady())
             OnAddon(AddonEvent.PostSetup, null!);
     }
     
     protected override void Uninit() =>
-        DService.Instance().AddonLifecycle.UnregisterListener(OnAddon);
+        IAddonLifecycle.Instance().UnregisterListener(OnAddon);
 
     protected override void ConfigUI()
     {
@@ -113,7 +114,7 @@ public class AutoJumboCactpotCustom : ModuleBase
 
         TaskHelper.Enqueue(() =>
         {
-            if (!DService.Instance().Condition.IsOccupiedInEvent)
+            if (!ICondition.Instance().IsOccupiedInEvent)
             {
                 TaskHelper.Abort();
                 return true;
