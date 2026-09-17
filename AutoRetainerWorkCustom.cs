@@ -3354,9 +3354,6 @@ public unsafe partial class AutoRetainerWorkCustom
             // 价格为 0
             if (modifiedPrice == 0) return;
 
-            // 价格不变
-            if (modifiedPrice == itemMarketData.Value.Price) return;
-
             if (IsAnyAbortConditionsMet
                 (
                     itemConfig,
@@ -3371,6 +3368,9 @@ public unsafe partial class AutoRetainerWorkCustom
                 EnqueueAbortBehavior(abortBehavior);
                 return;
             }
+
+            // 价格不变
+            if (modifiedPrice == itemMarketData.Value.Price) return;
 
             SetRetainerMarketItemPrice(slot, modifiedPrice);
             NotifyPriceAdjustSuccessfully
@@ -3400,6 +3400,7 @@ public unsafe partial class AutoRetainerWorkCustom
                 switch (behavior)
                 {
                     case AbortBehavior.改价至最小值:
+                        if (itemMarketData.Value.Price == (uint)itemConfig.PriceMinimum) break;
                         SetRetainerMarketItemPrice(slot, (uint)itemConfig.PriceMinimum);
                         NotifyPriceAdjustSuccessfully
                         (
@@ -3410,6 +3411,7 @@ public unsafe partial class AutoRetainerWorkCustom
                         );
                         break;
                     case AbortBehavior.改价至预期值:
+                        if (itemMarketData.Value.Price == (uint)itemConfig.PriceExpected) break;
                         SetRetainerMarketItemPrice(slot, (uint)itemConfig.PriceExpected);
                         NotifyPriceAdjustSuccessfully
                         (
@@ -3420,6 +3422,7 @@ public unsafe partial class AutoRetainerWorkCustom
                         );
                         break;
                     case AbortBehavior.改价至最高值:
+                        if (itemMarketData.Value.Price == (uint)itemConfig.PriceMaximum) break;
                         SetRetainerMarketItemPrice(slot, (uint)itemConfig.PriceMaximum);
                         NotifyPriceAdjustSuccessfully
                         (
@@ -3458,10 +3461,27 @@ public unsafe partial class AutoRetainerWorkCustom
             }
         }
 
-        private ItemConfig GetItemConfigByItemKey(ItemKey key) =>
-            ParentModule.config.ItemConfigs.TryGetValue(key.ToString(), out var itemConfig)
-                ? itemConfig
-                : ParentModule.config.ItemConfigs[new ItemKey(0, key.IsHQ).ToString()];
+        private ItemConfig GetItemConfigByItemKey(ItemKey key)
+        {
+            if (ParentModule.config.ItemConfigs.TryGetValue(key.ToString(), out var itemConfig))
+                return itemConfig;
+
+            var common = ParentModule.config.ItemConfigs[new ItemKey(0, key.IsHQ).ToString()];
+            return new ItemConfig
+            {
+                itemID            = key.itemID,
+                IsHQ              = key.IsHQ,
+                ItemName          = LuminaGetter.GetRow<Item>(key.itemID)?.Name.ToString() ?? string.Empty,
+                AbortLogic        = common.AbortLogic,
+                AdjustBehavior    = common.AdjustBehavior,
+                AdjustValues      = common.AdjustValues,
+                PriceExpected     = common.PriceExpected,
+                PriceMaximum      = common.PriceMaximum,
+                PriceMaxReduction = common.PriceMaxReduction,
+                PriceMinimum      = common.PriceMinimum,
+                UpshelfCount      = common.UpshelfCount,
+            };
+        }
 
         #endregion
 
@@ -3658,21 +3678,19 @@ public unsafe partial class AutoRetainerWorkCustom
         (
             ItemConfig config,
             uint       marketPrice
-        ) =>
-            (uint)(config.AdjustBehavior switch
-                      {
-                          AdjustBehavior.固定值 => Math.Max
-                          (
-                              0,
-                              marketPrice - config.AdjustValues[AdjustBehavior.固定值]
-                          ),
-                          AdjustBehavior.百分比 => Math.Max
-                          (
-                              0,
-                              marketPrice * (1 - (config.AdjustValues[AdjustBehavior.百分比] / 100))
-                          ),
-                          _ => marketPrice
-                      });
+        )
+        {
+            if (marketPrice == 0) return 0;
+
+            var calculatedPrice = config.AdjustBehavior switch
+            {
+                AdjustBehavior.固定值 => (long)marketPrice - config.AdjustValues[AdjustBehavior.固定值],
+                AdjustBehavior.百分比 => (long)Math.Round(marketPrice * (1.0 - (config.AdjustValues[AdjustBehavior.百分比] / 100.0))),
+                _                   => marketPrice
+            };
+
+            return (uint)Math.Clamp(calculatedPrice, 1, 999_999_999);
+        }
 
         /// <summary>
         ///     发送改价成功通知信息
