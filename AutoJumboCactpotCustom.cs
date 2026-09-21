@@ -136,7 +136,11 @@ public class AutoJumboCactpotCustom : ModuleBase
             return true;
         });
 
-        TaskHelper.Enqueue(() => AddonSelectYesnoEvent.ClickYes());
+        TaskHelper.Enqueue(() =>
+        {
+            AddonSelectYesnoEvent.ClickYes();
+            return false;
+        });
     }
 
     private int GetOrGenerateSessionNumber(long currentTime)
