@@ -38,6 +38,7 @@ using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using KamiToolKit;
 using Lumina.Excel.Sheets;
+using Lumina.Text.ReadOnly;
 using OmenTools;
 using OmenTools.Dalamud.Abstractions;
 using OmenTools.Dalamud.Attributes;
@@ -49,8 +50,10 @@ using OmenTools.Info.Game.Data;
 using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.Interop.Game.Models;
 using OmenTools.KamiToolKit.Addons;
 using OmenTools.KamiToolKit.Nodes;
+using OmenTools.KamiToolKit.Nodes.Collasping;
 using OmenTools.OmenService;
 using OmenTools.Threading;
 using OmenTools.Threading.TaskHelper;
@@ -1695,7 +1698,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                         .AddText(GetLoc("AutoRetainerWork-PriceAdjust-ConductAbortBehavior"))
                         .AddUiForeground(GetLoc(behavior), 67)
                         .Build();
-                    NotifyHelper.Chat(message.Encode());
+                    NotifyHelper.Instance().Chat(new ReadOnlySeString(message.Encode()));
                 }
 
                 if (behavior == AbortBehavior.无) return;
@@ -1938,7 +1941,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                 .AddText($" ({retainerName}) {origPrice.ToChineseString()} -> {modifiedPrice.ToChineseString()} ({priceChangeText} / {priceChangeRateText})")
                 .Build();
 
-            NotifyHelper.Chat(msg.Encode());
+            NotifyHelper.Instance().Chat(new ReadOnlySeString(msg.Encode()));
         }
 
         private void NotifyAbortCondition(
@@ -1965,7 +1968,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
             else
                 msg.AddText($" [Current Market Min Price: {marketPrice.ToChineseString()}]");
 
-            NotifyHelper.Chat(msg.Build().Encode());
+            NotifyHelper.Instance().Chat(new ReadOnlySeString(msg.Build().Encode()));
         }
 
         private static bool TryGetSameItemSlots(uint itemID, out List<ushort> slots)
