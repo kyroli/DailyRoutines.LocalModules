@@ -22,6 +22,7 @@ using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Hooking;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility.Raii;
+using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game;
@@ -149,12 +150,19 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                     !(ModuleManager.Instance().IsModuleEnabled("AutoTalkSkip") ?? false))
                 {
                     isTalkSkipAutoEnabled = true;
-                    ModuleManager.Instance().LoadAsync(module);
+                    ModuleManager.Instance().LoadAsync(module).ContinueWith(_ =>
+                    {
+                        if (PluginConfig.Instance().ModuleEnabled.TryGetValue("AutoTalkSkip", out var enabled) && enabled)
+                        {
+                            PluginConfig.Instance().ModuleEnabled["AutoTalkSkip"] = false;
+                            DService.Instance().PI.SavePluginConfig(PluginConfig.Instance());
+                        }
+                    });
                 }
             }
             else DisableTalkSkipIfAutoEnabled();
         }
-        else if ((flag == ConditionFlag.BoundByDuty || flag == ConditionFlag.BetweenAreas) && value)
+        else if (flag == ConditionFlag.BoundByDuty && value || flag == ConditionFlag.BetweenAreas)
         {
             DisableTalkSkipIfAutoEnabled();
         }
@@ -162,9 +170,15 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
 
     private static void DisableTalkSkipIfAutoEnabled()
     {
-        if (isTalkSkipAutoEnabled && ModuleManager.Instance().GetModuleByName("AutoTalkSkip") is { } module)
+        if (!isTalkSkipAutoEnabled) return;
+
+        if (ModuleManager.Instance().GetModuleByName("AutoTalkSkip") is { } module)
         {
-            ModuleManager.Instance().UnloadAsync(module);
+            if (ModuleManager.Instance().IsModuleEnabled("AutoTalkSkip") ?? false)
+            {
+                ModuleManager.Instance().UnloadAsync(module).ContinueWith(_ => isTalkSkipAutoEnabled = false);
+                return;
+            }
         }
         isTalkSkipAutoEnabled = false;
     }
