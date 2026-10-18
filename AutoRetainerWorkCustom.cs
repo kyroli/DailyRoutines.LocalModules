@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -63,11 +63,11 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
     public override ModuleInfo Info => new()
     {
         Title = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified
-                    ? "自动雇员作业 (定制版)"
+                    ? "自动雇员作业(改)"
                     : "Auto Retainer Work (Custom)",
         Description = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified
-                          ? "全自动处理雇员探险收取派遣、物品改价、金币管理等。\n※ 定制增强版：包含改价 1 Gil 保底、异常降价拦截防护、控制器导航对齐及 BetterMarketBoard 深度联动。"
-                          : "Fully automated retainer venture collecting/dispatching, price adjusting, and gil management.\n※ Custom Enhanced: Includes 1 Gil price floor protection, abnormal price drop detection, controller navigation, and BetterMarketBoard integration.",
+                          ? "基于官方同名模块修改，自动收取并重新派遣雇员。\n※ 增加了与雇员交互期间会自动开启“跳过对话”模块的功能。\n※ 增加了自动改价时的断层超低价过滤保护，防止因个例错价导致改价异常。"
+                          : "Automatically collects and dispatches retainers.\n※ Added auto 'Skip Dialogue' when interacting with retainers.\n※ Added fallback protection for abnormal low prices when auto adjusting market price.",
         Category  = ModuleCategory.Interface,
         Author    = ["AtmoOmen", "nynpsu"],
         ReportURL = "https://github.com/kyroli/DailyRoutines.LocalModules/issues",
