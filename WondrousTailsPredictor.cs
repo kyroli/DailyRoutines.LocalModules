@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
@@ -9,17 +8,15 @@ using Dalamud.Game;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.Text.SeStringHandling;
-using Dalamud.Game.Text.SeStringHandling.Payloads;
-using Dalamud.Memory;
 using Dalamud.Plugin.Services;
 
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI;
-using FFXIVClientStructs.FFXIV.Component.GUI;
 
-using OmenTools;
 using OmenTools.Dalamud;
 using OmenTools.Extensions;
+using OmenTools.Info.Game.Data;
+using OmenTools.Interop.Game.Lumina;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -27,83 +24,46 @@ public unsafe class WondrousTailsPredictor : ModuleBase
 {
     public override ModuleInfo Info => new()
     {
-        Title       = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "天书连线概率" : "Wondrous Tails Predictor",
-        Description = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "在天书界面实时计算并显示连线概率，辅助洗牌决策。" : "Calculates and displays line probabilities in Wondrous Tails, assisting with shuffle decisions.",
+        Title       = IClientState.Instance().ClientLanguage == ClientLanguage.ChineseSimplified ? "天书连线概率" : "Wondrous Tails Predictor",
+        Description = IClientState.Instance().ClientLanguage == ClientLanguage.ChineseSimplified ? "在天书界面实时计算并显示连线概率，辅助洗牌决策。" : "Calculates and displays line probabilities in Wondrous Tails, assisting with shuffle decisions.",
         Category    = ModuleCategory.Interface,
         Author      = ["nynpsu"],
         ReportURL   = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
     };
 
-    private static readonly ushort[] WinLines = [
-        0x000F, 0x00F0, 0x0F00, 0xF000, 0x1111, 0x2222, 0x4444, 0x8888, 0x8421, 0x1248
-    ];
+    private static readonly byte[] LineTable = new byte[65536];
+    private static readonly int[] TotalPaths = [11440, 6435, 3432, 1716, 792, 330, 120, 36, 8, 1];
 
-    private struct ProbResult(bool calculated, double line1, double line2, double line3)
-    {
-        public bool Calculated = calculated;
-        public double Line1 = line1;
-        public double Line2 = line2;
-        public double Line3 = line3;
-    }
-
-    private static readonly ProbResult[] MathCache = new ProbResult[65536];
-    
-    private static readonly double[] GlobalShuffleExpectation = [
-        6688.0 / 11440.0, // ~58.46% (1线理论常数)
-        1208.0 / 11440.0, // ~10.56% (2线理论常数)
-        24.0 / 11440.0    // ~0.21% (3线理论常数)
-    ];
-
-    private struct LineCountInfo(byte line1, byte line2, byte line3)
-    {
-        public byte Line1 = line1;
-        public byte Line2 = line2;
-        public byte Line3 = line3;
-    }
-
-    private static readonly LineCountInfo[] LineInfoTable = new LineCountInfo[65536];
-    
-    private static readonly int[] TotalPathsTable = [11440, 6435, 3432, 1716, 792, 330, 120, 36, 8, 1];
+    private static string[] BaseTitles = [];
+    private ushort PrevMask = 0xFFFF;
 
     static WondrousTailsPredictor()
     {
-        for (var state = 0; state < 65536; state++)
-        {
-            byte lines = 0;
-            foreach (var w in WinLines)
-            {
-                if ((state & w) == w) lines++;
-            }
-            LineInfoTable[state] = new LineCountInfo(
-                (byte)(lines >= 1 ? 1 : 0),
-                (byte)(lines >= 2 ? 1 : 0),
-                (byte)(lines >= 3 ? 1 : 0)
-            );
-        }
-    }
+        ReadOnlySpan<ushort> winLines = [
+            0x000F, 0x00F0, 0x0F00, 0xF000, 0x1111, 0x2222, 0x4444, 0x8888, 0x8421, 0x1248
+        ];
 
-    private ushort PrevMask = 0xFFFF;
-    private (string Current, string Line) LocStrings;
-    private string LocMarker = string.Empty;
-    private byte[]? LocMarkerBytes;
+        for (var state = 0; state < 65536; state++)
+            foreach (var w in winLines)
+                if ((state & w) == w) LineTable[state]++;
+    }
 
     protected override void Init()
     {
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, "WeeklyBingo", OnAddonEvent);
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "WeeklyBingo", OnAddonEvent);
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRefresh, "WeeklyBingo", OnAddonEvent);
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostUpdate, "WeeklyBingo", OnAddonEvent);
-        
-        LocStrings = IClientState.Instance().ClientLanguage switch
-        {
-            Dalamud.Game.ClientLanguage.ChineseSimplified => ("当前", "线"),
-            _ => ("Current", " Line(s)")
-        };
-        LocMarker = $"{LocStrings.Current}: ";
-        LocMarkerBytes = System.Text.Encoding.UTF8.GetBytes(LocMarker);
+        var al = IAddonLifecycle.Instance();
+        al.RegisterListener(AddonEvent.PostSetup,   "WeeklyBingo", OnAddonEvent);
+        al.RegisterListener(AddonEvent.PostRefresh, "WeeklyBingo", OnAddonEvent);
+        al.RegisterListener(AddonEvent.PreFinalize, "WeeklyBingo", OnAddonEvent);
+
+        BaseTitles = [
+            LuminaWrapper.GetAddonText(5611),
+            LuminaWrapper.GetAddonText(5612),
+            LuminaWrapper.GetAddonText(5613)
+        ];
 
         PrevMask = 0xFFFF;
-        RefreshAddon();
+        var addon = (AddonWeeklyBingo*)Addons.WeeklyBingo;
+        if (addon != null) UpdateProbabilities(addon);
     }
 
     protected override void Uninit()
@@ -114,293 +74,107 @@ public unsafe class WondrousTailsPredictor : ModuleBase
 
     private void OnAddonEvent(AddonEvent type, AddonArgs args)
     {
-        try
-        {
-            if (args.Addon.Address == nint.Zero) return;
-            
-            switch (type)
-            {
-                case AddonEvent.PostSetup:
-                case AddonEvent.PostRefresh:
-                    PrevMask = 0xFFFF;
-                    UpdateProbabilities((AddonWeeklyBingo*)args.Addon.Address);
-                    break;
-                case AddonEvent.PostUpdate:
-                    UpdateProbabilities((AddonWeeklyBingo*)args.Addon.Address);
-                    break;
-                case AddonEvent.PreFinalize:
-                    PrevMask = 0xFFFF;
-                    break;
-            }
-        }
-        catch (Exception ex)
-        {
-            DLog.Error("WondrousTailsPredictor exception in OnAddonEvent", ex);
-        }
-    }
-
-    private void RefreshAddon()
-    {
-        var ptr = IGameGui.Instance().GetAddonByName("WeeklyBingo").Address;
-        if (ptr != nint.Zero)
-        {
+        if (type == AddonEvent.PreFinalize)
             PrevMask = 0xFFFF;
-            UpdateProbabilities((AddonWeeklyBingo*)ptr);
-        }
-    }
-
-    private void RestoreAddon()
-    {
-        var ptr = IGameGui.Instance().GetAddonByName("WeeklyBingo").Address;
-        if (ptr == nint.Zero) return;
-        
-        var addon = (AddonWeeklyBingo*)ptr;
-        var node = addon->StringThing.TextNode;
-        if (node != null && node->NodeText.StringPtr.Value != null)
-        {
-            var currentSeString = MemoryHelper.ReadSeStringNullTerminated((nint)node->NodeText.StringPtr.Value);
-            var baseText = StripOurText(currentSeString, out _);
-            node->SetText(baseText.Encode());
-        }
-    }
-
-    private bool NativeStringContainsMarker(nint ptr)
-    {
-        if (ptr == nint.Zero || LocMarkerBytes == null || LocMarkerBytes.Length == 0) return false;
-        var p = (byte*)ptr;
-        var len = LocMarkerBytes.Length;
-        var firstByte = LocMarkerBytes[0];
-        while (*p != 0)
-        {
-            if (*p == firstByte)
-            {
-                var match = true;
-                for (var i = 1; i < len; i++)
-                {
-                    if (p[i] == 0 || p[i] != LocMarkerBytes[i])
-                    {
-                        match = false;
-                        break;
-                    }
-                }
-                if (match) return true;
-            }
-            p++;
-        }
-        return false;
+        else
+            UpdateProbabilities((AddonWeeklyBingo*)args.Addon.Address);
     }
 
     private void UpdateProbabilities(AddonWeeklyBingo* addon)
     {
-        var state = PlayerState.Instance();
+        var player = PlayerState.Instance();
+        if (player == null || !player->HasWeeklyBingoJournal) return;
+
         ushort currentMask = 0;
         var stickers = 0;
-
         for (var i = 0; i < 16; i++)
         {
-            if (state->IsWeeklyBingoStickerPlaced(i))
+            if (player->IsWeeklyBingoStickerPlaced(i))
             {
                 currentMask |= (ushort)(1 << i);
                 stickers++;
             }
         }
 
-        var textNode = addon->StringThing.TextNode;
-        if (textNode == null || textNode->NodeText.StringPtr.Value == null) return;
-
-        var currentPtr = (nint)textNode->NodeText.StringPtr.Value;
-        if (currentMask == PrevMask && NativeStringContainsMarker(currentPtr)) return;
-
-        var currentSeString = MemoryHelper.ReadSeStringNullTerminated(currentPtr);
-        var strippedSeString = StripOurText(currentSeString, out _);
-
+        if (currentMask == PrevMask) return;
         PrevMask = currentMask;
 
-        var currentProb = CalculateExactProbabilities(currentMask, stickers);
-
-        var sb = new SeStringBuilder();
-        sb.Append(strippedSeString);
-        sb.AddText("\n");
-        sb.AddText(LocMarker);
-        
-        sb.AddText($"1{LocStrings.Line}: ");
-        FormatProb(sb, currentProb.Line1, GlobalShuffleExpectation[0]);
-        sb.AddText("   ");
-
-        sb.AddText($"2{LocStrings.Line}: ");
-        FormatProb(sb, currentProb.Line2, GlobalShuffleExpectation[1]);
-        sb.AddText("   ");
-
-        sb.AddText($"3{LocStrings.Line}: ");
-        FormatProb(sb, currentProb.Line3, GlobalShuffleExpectation[2]);
-
-        var encoded = sb.Build().Encode();
-        textNode->SetText(encoded);
+        var prob = CalculateExactProbabilities(currentMask, stickers);
+        addon->GetTextNodeById(78)->SetText(BuildLineText(BaseTitles[0], prob.Line1, 0.70));
+        addon->GetTextNodeById(89)->SetText(BuildLineText(BaseTitles[1], prob.Line2, 0.20));
+        addon->GetTextNodeById(100)->SetText(BuildLineText(BaseTitles[2], prob.Line3, 0.05));
     }
 
-    private SeString StripOurText(SeString original, out bool hasOurText)
+    private static void RestoreAddon()
     {
-        var marker = LocMarker;
-        var payloads = original.Payloads;
-        var count = payloads.Count;
-        
-        var markerIdx = -1;
-        var textIdxWithinPayload = -1;
-        
-        for (var i = 0; i < count; i++)
-        {
-            if (payloads[i] is TextPayload tp2 && tp2.Text != null)
-            {
-                var idx = tp2.Text.IndexOf(marker, StringComparison.Ordinal);
-                if (idx >= 0)
-                {
-                    markerIdx = i;
-                    textIdxWithinPayload = idx;
-                    break;
-                }
-            }
-        }
+        var addon = (AddonWeeklyBingo*)Addons.WeeklyBingo;
+        if (addon == null) return;
 
-        if (markerIdx == -1)
-        {
-            hasOurText = false;
-            return original;
-        }
-
-        hasOurText = true;
-
-        var tempPayloads = new List<Payload>(markerIdx + 1);
-        for (var i = 0; i < markerIdx; i++)
-        {
-            tempPayloads.Add(payloads[i]);
-        }
-
-        var targetTextPayload = (TextPayload)payloads[markerIdx];
-        var targetText = targetTextPayload.Text ?? string.Empty;
-        var sliceLen = Math.Min(textIdxWithinPayload, targetText.Length);
-        var beforeText = targetText[..sliceLen];
-        
-        if (beforeText.EndsWith('\n'))
-        {
-            beforeText = beforeText[..^1];
-        }
-        else if (beforeText.Length == 0 && tempPayloads.Count > 0)
-        {
-            var last = tempPayloads[^1];
-            if (last is NewLinePayload)
-            {
-                tempPayloads.RemoveAt(tempPayloads.Count - 1);
-            }
-            else if (last is TextPayload prevTextPayload && prevTextPayload.Text != null && prevTextPayload.Text.EndsWith('\n'))
-            {
-                var prevText = prevTextPayload.Text;
-                if (prevText.Length == 1) tempPayloads.RemoveAt(tempPayloads.Count - 1);
-                else tempPayloads[^1] = new TextPayload(prevText[..^1]);
-            }
-        }
-
-        if (beforeText.Length > 0)
-        {
-            tempPayloads.Add(new TextPayload(beforeText));
-        }
-
-        return new SeString(tempPayloads);
+        addon->GetTextNodeById(78)->SetText(BaseTitles[0]);
+        addon->GetTextNodeById(89)->SetText(BaseTitles[1]);
+        addon->GetTextNodeById(100)->SetText(BaseTitles[2]);
     }
 
-    private void FormatProb(SeStringBuilder sb, double val, double baseline)
+    private static byte[] BuildLineText(string title, double val, double highThreshold)
     {
-        var text = $"{val * 100:F2}%";
-        if (val <= 0)
+        var text = $"{val:P2}";
+        ushort color = val switch
         {
-            sb.AddUiForeground(text, 3);
-        }
-        else if (Math.Abs(val - 1.0) < 0.0001)
-        {
-            sb.AddUiForeground(text, 31);
-        }
-        else if (baseline > 0 && val / baseline >= 1.5)
-        {
-            sb.AddUiForeground(text, 67);
-        }
-        else
-        {
-            sb.AddText(text);
-        }
+            >= 0.9999 => 32,
+            <= 0 => 3,
+            _ when val >= highThreshold => 45,
+            _ => 0
+        };
+
+        var sb = new SeStringBuilder().AddText(title).AddText(" (");
+        if (color != 0) sb.AddUiForeground(text, color);
+        else sb.AddText(text);
+
+        return sb.AddText(")").Build().Encode();
     }
 
     private ref struct SearchContext
     {
-        public int Line1;
-        public int Line2;
-        public int Line3;
+        public int Line1, Line2, Line3;
         public ReadOnlySpan<byte> EmptySlots;
     }
 
-    private static ProbResult CalculateExactProbabilities(ushort state, int placed)
+    private static (double Line1, double Line2, double Line3) CalculateExactProbabilities(ushort state, int placed)
     {
-        if (placed > 9) return default;
-        
-        ref var cached = ref MathCache[state];
-        if (cached.Calculated) return cached;
-
         if (placed == 9)
         {
-            var info = LineInfoTable[state];
-            cached = new ProbResult(true, info.Line1, info.Line2, info.Line3);
-            return cached;
+            var lines = LineTable[state];
+            return (lines >= 1 ? 1 : 0, lines >= 2 ? 1 : 0, lines >= 3 ? 1 : 0);
         }
-
-        var remainStickers = 9 - placed;
-        var remainSpots = 16 - placed;
 
         Span<byte> emptySlots = stackalloc byte[16];
-        var emptyIndex = 0;
+        var emptyCount = 0;
         for (var i = 0; i < 16; i++)
-        {
-            if ((state & (1 << i)) == 0) emptySlots[emptyIndex++] = (byte)i;
-        }
+            if ((state & (1 << i)) == 0) emptySlots[emptyCount++] = (byte)i;
 
-        var ctx = new SearchContext
-        {
-            EmptySlots = emptySlots[..remainSpots]
-        };
-        Enumerate(0, remainStickers, state, ref ctx);
+        var ctx = new SearchContext { EmptySlots = emptySlots[..emptyCount] };
+        Enumerate(0, 9 - placed, state, ref ctx);
 
-        var totalPaths = TotalPathsTable[placed];
-        cached = new ProbResult(
-            true,
-            (double)ctx.Line1 / totalPaths,
-            (double)ctx.Line2 / totalPaths,
-            (double)ctx.Line3 / totalPaths
-        );
-            
-        return cached;
+        var total = TotalPaths[placed];
+        return ((double)ctx.Line1 / total, (double)ctx.Line2 / total, (double)ctx.Line3 / total);
 
-        static void Enumerate(
-            int startIdx, 
-            int needToPlace, 
-            ushort currentBoard, 
-            ref SearchContext ctx)
+        static void Enumerate(int startIdx, int need, ushort board, ref SearchContext ctx)
         {
-            if (needToPlace == 1)
+            if (need == 1)
             {
-                var len = ctx.EmptySlots.Length;
-                for (var i = startIdx; i < len; i++)
+                for (var i = startIdx; i < ctx.EmptySlots.Length; i++)
                 {
-                    var board = (ushort)(currentBoard | (1 << ctx.EmptySlots[i]));
-                    var info = LineInfoTable[board];
-                    ctx.Line1 += info.Line1;
-                    ctx.Line2 += info.Line2;
-                    ctx.Line3 += info.Line3;
+                    var lines = LineTable[board | (1 << ctx.EmptySlots[i])];
+                    if (lines >= 1) ctx.Line1++;
+                    if (lines >= 2) ctx.Line2++;
+                    if (lines >= 3) ctx.Line3++;
                 }
                 return;
             }
 
-            var limit = ctx.EmptySlots.Length - needToPlace;
+            var limit = ctx.EmptySlots.Length - need;
             for (var i = startIdx; i <= limit; i++)
-            {
-                Enumerate(i + 1, needToPlace - 1, (ushort)(currentBoard | (1 << ctx.EmptySlots[i])), ref ctx);
-            }
+                Enumerate(i + 1, need - 1, (ushort)(board | (1 << ctx.EmptySlots[i])), ref ctx);
         }
     }
 }
