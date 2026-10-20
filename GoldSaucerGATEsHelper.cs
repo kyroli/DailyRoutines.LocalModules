@@ -1,3 +1,5 @@
+#nullable enable
+
 using System;
 using System.Collections.Generic;
 using System.Numerics;
@@ -46,7 +48,12 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
 
     private const uint GimmickSingleRect = 2010777;
     private const uint GimmickDoubleRect = 2010778;
-    private const uint GimmickCircle = 2010779;
+    private const uint GimmickCircle     = 2010779;
+
+    // 部分镰刀预警对象以辅助 OID 形式出现, 需要映射回对应的 Gimmick 类型
+    private const uint HelperSingleRectOID = 0x1EAE99;
+    private const uint HelperDoubleRectOID = 0x1EAE9A;
+    private const uint HelperCircleOID     = 0x1EAE9B;
 
     private readonly Dictionary<ulong, long> objectSpawnTimes = [];
 
@@ -88,16 +95,28 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
     {
         helperType = 0;
         if (!gameObject.IsValid()) return false;
-        
-        if (gameObject.ObjectKind == ObjectKind.EventObj)
+
+        if (gameObject.ObjectKind == ObjectKind.EventObj && gameObject.DataID is >= GimmickSingleRect and <= GimmickCircle)
         {
-            if (gameObject.DataID is >= GimmickSingleRect and <= GimmickCircle)
-            {
-                helperType = gameObject.DataID;
-                return true;
-            }
+            helperType = gameObject.DataID;
+            return true;
         }
-        return false;
+
+        if (gameObject.GimmickID is >= GimmickSingleRect and <= GimmickCircle)
+        {
+            helperType = gameObject.GimmickID;
+            return true;
+        }
+
+        helperType = gameObject.DataID switch
+        {
+            HelperSingleRectOID or GimmickSingleRect => GimmickSingleRect,
+            HelperDoubleRectOID or GimmickDoubleRect => GimmickDoubleRect,
+            HelperCircleOID     or GimmickCircle     => GimmickCircle,
+            _                                        => 0
+        };
+
+        return helperType != 0;
     }
 
     protected override void Init()
@@ -363,9 +382,9 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
         var gameGUI  = IGameGui.Instance();
         var drawList = ImGui.GetBackgroundDrawList();
 
-        var anyVisible = false;
         drawList.PathClear();
 
+        var visiblePointCount = 0;
         for (var i = 0; i < 40; i++)
         {
             var wp = new Vector3(
@@ -373,14 +392,14 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
                 center.Y,
                 center.Z + radius * CircleCoses[i]);
 
-            if (gameGUI.WorldToScreen(wp, out var sp))
-            {
-                anyVisible = true;
-            }
+            // WorldToScreen 失败时输出坐标不可用于绘制 (相机背面的点会得到镜像伪坐标), 必须整点跳过
+            if (!gameGUI.WorldToScreen(wp, out var sp)) continue;
+
             drawList.PathLineTo(sp);
+            visiblePointCount++;
         }
 
-        if (anyVisible) drawList.PathFillConvex(colour);
+        if (visiblePointCount >= 3) drawList.PathFillConvex(colour);
         else drawList.PathClear();
     }
 

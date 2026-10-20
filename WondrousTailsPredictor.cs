@@ -1,3 +1,5 @@
+#nullable enable
+
 using System;
 
 using DailyRoutines.Common.Module.Abstractions;

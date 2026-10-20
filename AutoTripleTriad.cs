@@ -1,4 +1,6 @@
-﻿using System;
+#nullable enable
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -9,6 +11,7 @@ using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using FFXIVClientStructs.FFXIV.Client.UI;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -45,15 +48,18 @@ public unsafe class AutoTripleTriad : ModuleBase
     private int matchCount = 0;
     private bool isInMatch = false;
     private bool isResultShown = false;
-    private bool reflectionFailed = false;
     private bool isReflectionInitialized = false;
     private static bool isCN = false;
-
     private long lastSelectStringTime = 0;
     private long lastRequestTime = 0;
     private long lastSelDeckTime = 0;
     private long resultShowTime = 0;
     private long lastResultActionTime = 0;
+
+    private const int PlayerTurnAtkValueIndex = 23;
+    private const int MovePlacementGraceMS    = 150;
+
+    private long moveAvailableTime = 0;
 
     // Reflection caching
     private FieldInfo? solverGameStaticField;
@@ -161,14 +167,11 @@ public unsafe class AutoTripleTriad : ModuleBase
             }
             ImGui.Unindent();
         }
-
-        ImGui.Unindent();
     }
 
     protected override void Init()
     {
         config = LoadConfig<Config>() ?? new Config();
-        reflectionFailed = false;
         isReflectionInitialized = false;
         isCN = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
 
@@ -199,7 +202,6 @@ public unsafe class AutoTripleTriad : ModuleBase
         isInMatch = false;
         isResultShown = false;
         matchCount = 0;
-        reflectionFailed = false;
         isReflectionInitialized = false;
         
         wasPrepOpen = false;
@@ -207,6 +209,7 @@ public unsafe class AutoTripleTriad : ModuleBase
         cachedNPCID = -1;
         lastNPCCheckTime = 0;
         isExitingFromCompletion = false;
+        moveAvailableTime = 0;
         cardToItemMap.Clear();
         isCardToItemMapInitialized = false;
 
@@ -238,7 +241,7 @@ public unsafe class AutoTripleTriad : ModuleBase
     private bool TryInitializeReflection()
     {
         if (isReflectionInitialized) return true;
-        reflectionFailed = true;
+
         try
         {
             var assembly = AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a => a.GetName().Name == "TriadBuddy");
@@ -247,17 +250,17 @@ public unsafe class AutoTripleTriad : ModuleBase
             var solverUtilsType = assembly.GetType("TriadBuddyPlugin.SolverUtils");
             if (solverUtilsType == null) return false;
 
-            solverGameStaticField = solverUtilsType.GetField("solverGame", BindingFlags.Public | BindingFlags.Static);
+            solverGameStaticField         = solverUtilsType.GetField("solverGame", BindingFlags.Public | BindingFlags.Static);
             solverPreGameDecksStaticField = solverUtilsType.GetField("solverPreGameDecks", BindingFlags.Public | BindingFlags.Static);
-            
+
             if (solverGameStaticField == null || solverPreGameDecksStaticField == null) return false;
 
-            var solverGameType = assembly.GetType("TriadBuddyPlugin.SolverGame");
+            var solverGameType         = assembly.GetType("TriadBuddyPlugin.SolverGame");
             var solverPreGameDecksType = assembly.GetType("TriadBuddyPlugin.SolverPreGameDecks");
 
             if (solverGameType == null || solverPreGameDecksType == null) return false;
 
-            var gameNPCDBType = assembly.GetType("TriadBuddyPlugin.GameNpcDB");
+            var gameNPCDBType   = assembly.GetType("TriadBuddyPlugin.GameNpcDB");
             var gameNPCInfoType = assembly.GetType("TriadBuddyPlugin.GameNpcInfo");
 
             if (gameNPCDBType == null || gameNPCInfoType == null) return false;
@@ -285,6 +288,7 @@ public unsafe class AutoTripleTriad : ModuleBase
             // GameNpcInfo / NPC fields
             var triadNPCType = assembly.GetType("FFTriadBuddy.TriadNpc");
             if (triadNPCType == null) return false;
+
             triadNPCIDField = triadNPCType.GetField("Id", instanceFlags);
             gameNPCInfoRewardCardsField = gameNPCInfoType.GetField("rewardCards", instanceFlags);
 
@@ -295,18 +299,14 @@ public unsafe class AutoTripleTriad : ModuleBase
                 gameNPCDBGetMethod == null || gameNPCDBMapNPCsField == null ||
                 triadNPCIDField == null ||
                 gameNPCInfoRewardCardsField == null)
-            {
-                DLog.Warning("AutoTripleTriad: 获取 TriadBuddy 必需字段失败，已中止自动处理。");
                 return false;
-            }
 
-            reflectionFailed = false;
             isReflectionInitialized = true;
             return true;
         }
         catch (Exception ex)
         {
-            DLog.Warning($"AutoTripleTriad: 反射初始化异常: {ex.Message}，已中止自动处理。");
+            DLog.Warning($"AutoTripleTriad: 反射初始化异常: {ex.Message}");
             return false;
         }
     }
@@ -368,7 +368,7 @@ public unsafe class AutoTripleTriad : ModuleBase
 
         if (Environment.TickCount64 - lastPrepCloseTime < 3000 && isSelDeckOpen && !config.EnableTripleTriad)
         {
-            if (!reflectionFailed && TryInitializeReflection())
+            if (TryInitializeReflection())
             {
                 config.EnableTripleTriad = true;
                 matchCount = 0;
@@ -450,9 +450,8 @@ public unsafe class AutoTripleTriad : ModuleBase
                 SaveConfig(config);
                 IChatGui.Instance().Print(GetLoc("DoneCount"));
 
-                var selectString = (FFXIVClientStructs.FFXIV.Client.UI.AddonSelectString*)addon;
-                var popupMenu = (FFXIVClientStructs.FFXIV.Client.UI.PopupMenu*)((byte*)selectString + 0x238);
-                int exitIndex = popupMenu->EntryCount - 1;
+                var selectString = (AddonSelectString*)addon;
+                var exitIndex    = selectString->PopupMenu.PopupMenu.EntryCount - 1;
                 if (exitIndex >= 0)
                 {
                     addon->Callback(exitIndex);
@@ -582,7 +581,7 @@ public unsafe class AutoTripleTriad : ModuleBase
     {
         if (solverPreGameNPCField == null)
         {
-            if (reflectionFailed || !TryInitializeReflection()) return;
+            if (!TryInitializeReflection()) return;
         }
         try
         {
@@ -677,24 +676,42 @@ public unsafe class AutoTripleTriad : ModuleBase
             }
 
             var hasMove = (bool)solverGameHasMoveField!.GetValue(externalSolverGame)!;
-            if (hasMove)
+            if (!hasMove)
             {
-                var move = (int)solverGameMoveCardIdxField!.GetValue(externalSolverGame)!;
-                var pos = (int)solverGameMoveBoardIdxField!.GetValue(externalSolverGame)!;
-
-                var addon = (FFXIVClientStructs.FFXIV.Client.UI.AddonTripleTriad*)IGameGui.Instance().GetAddonByName("TripleTriad").Address;
-                if (addon == null) return;
-                
-                var values = stackalloc AtkValue[2];
-                values[0].Type = AtkValueType.Int;
-                values[0].Int = 14;
-                values[1].Type = AtkValueType.UInt;
-                values[1].UInt = (uint)pos + ((uint)move << 16);
-                
-                addon->AtkUnitBase.FireCallback(2, values, true);
-                addon->AtkUnitBase.Update(0);
-                addon->TurnState = 0;
+                moveAvailableTime = 0;
+                return;
             }
+
+            var addon = (AddonTripleTriad*)IGameGui.Instance().GetAddonByName("TripleTriad").Address;
+            if (addon == null) return;
+
+            // 仅在我方可落子时出牌, 避开 Waiting 与对手回合
+            var turnState = addon->TurnState;
+            var unit      = &addon->AtkUnitBase;
+            var canAct = turnState == TurnState.MaskedMove ||
+                         (turnState == TurnState.NormalMove &&
+                          unit->AtkValuesCount > PlayerTurnAtkValueIndex &&
+                          unit->AtkValues[PlayerTurnAtkValueIndex] is { Type: AtkValueType.Int, Int: 1 });
+            if (!canAct) return;
+
+            // 解析器给出可行棋后先等一小段, 避免在棋子高亮/翻面动画期间抢先落子
+            var now = Environment.TickCount64;
+            if (moveAvailableTime == 0) moveAvailableTime = now;
+            if (now - moveAvailableTime < MovePlacementGraceMS) return;
+
+            var move = (int)solverGameMoveCardIdxField!.GetValue(externalSolverGame)!;
+            var pos  = (int)solverGameMoveBoardIdxField!.GetValue(externalSolverGame)!;
+
+            var values = stackalloc AtkValue[2];
+            values[0].Type = AtkValueType.Int;
+            values[0].Int  = 14;
+            values[1].Type = AtkValueType.UInt;
+            values[1].UInt = (uint)pos + ((uint)move << 16);
+
+            addon->AtkUnitBase.FireCallback(2, values, true);
+            addon->AtkUnitBase.Update(0);
+            addon->TurnState  = TurnState.Waiting;
+            moveAvailableTime = 0;
         }
         catch (Exception ex)
         {
@@ -819,7 +836,7 @@ public unsafe class AutoTripleTriad : ModuleBase
     private void EnsureCardToItemMapInitialized()
     {
         if (isCardToItemMapInitialized) return;
-        isCardToItemMapInitialized = true;
+
         cardToItemMap.Clear();
 
         try
@@ -845,6 +862,7 @@ public unsafe class AutoTripleTriad : ModuleBase
                     // 忽略单个非卡牌物品的解析异常
                 }
             }
+            isCardToItemMapInitialized = true;
             DLog.Debug($"AutoTripleTriad: 卡牌物品映射初始化完成，加载 {cardToItemMap.Count} 项");
         }
         catch (Exception ex)
@@ -852,4 +870,4 @@ public unsafe class AutoTripleTriad : ModuleBase
             DLog.Error("AutoTripleTriad: 初始化卡牌物品映射失败", ex);
         }
     }
-    }
+}

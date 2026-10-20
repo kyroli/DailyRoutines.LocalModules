@@ -1,3 +1,5 @@
+#nullable enable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -49,9 +51,9 @@ public unsafe class AutoQuestSay : ModuleBase
 
     public delegate ulong InteractWithObjectDelegate(TargetSystem* system, GameObject* obj, bool checkLOS);
 
-    private static readonly Regex ChineseRegex = new(@"(?:“|""""|「)([^“”""""「」]+?)(?:”|""""|」)", RegexOptions.Compiled);
+    private static readonly Regex ChineseRegex = new(@"(?:“|\x22|「)([^“”\x22「」]+?)(?:”|\x22|」)", RegexOptions.Compiled);
     private static readonly Regex JapaneseRegex = new(@"(?:「)([^「」]+?)(?:」)", RegexOptions.Compiled);
-    private static readonly Regex EnglishRegex = new(@"(?:""""|“)([^""""“”]+?)(?:""""|”)", RegexOptions.Compiled);
+    private static readonly Regex EnglishRegex = new(@"(?:\x22|“)([^\x22“”]+?)(?:\x22|”)", RegexOptions.Compiled);
     private static readonly Regex GermanRegex = new(@"(?:„|»)([^„“»«]+?)(?:“|«)", RegexOptions.Compiled);
     private static readonly Regex FrenchRegex = new(@"(?:«\s*|“)([^«»“”]+?)(?:\s*»|”)", RegexOptions.Compiled);
     private static readonly Regex SayKeyRegex = new(@"_(SAY|SAYTODO|SYSTEM)_", RegexOptions.Compiled);

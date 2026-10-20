@@ -1,3 +1,5 @@
+#nullable enable
+
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -75,10 +77,10 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
     };
 
     [IPCSubscriber("DailyRoutines.Modules.BetterMarketBoard.SearchItem")]
-    private static IPCSubscriber<uint, bool>? SearchItemIPC;
+    private static IPCSubscriber<uint, bool>? SearchItemIPC = null;
 
     [IPCSubscriber("DailyRoutines.Modules.BetterMarketBoard.ToggleOverlay")]
-    private static IPCSubscriber<bool?, bool>? ToggleOverlayIPC;
+    private static IPCSubscriber<bool?, bool>? ToggleOverlayIPC = null;
 
     private readonly Throttler<string> retainerThrottler = new();
     private readonly HashSet<ulong>    playerRetainers   = [];
