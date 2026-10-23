@@ -68,7 +68,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                     ? "自动雇员作业(改)"
                     : "Auto Retainer Work (Custom)",
         Description = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified
-                          ? "基于官方同名模块修改，自动收取并重新派遣雇员。\n※ 增加了与雇员交互期间会自动开启“跳过对话”模块的功能。\n※ 增加了自动改价时的断层超低价过滤保护，防止因个例错价导致改价异常。"
+                          ? "基于官方同名模块修改，自动收取并重新派遣雇员。\n※ 增加了与雇员交互期间会自动开启“跳过对话”模块的功能。\n※ 增加了自动改价时的异常低价跳过保护，防止因个例错价导致改价异常。"
                           : "Automatically collects and dispatches retainers.\n※ Added auto 'Skip Dialogue' when interacting with retainers.\n※ Added fallback protection for abnormal low prices when auto adjusting market price.",
         Category  = ModuleCategory.Interface,
         Author    = ["AtmoOmen", "nynpsu"],
@@ -1017,7 +1017,8 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                                 PriceMaximum      = itemConfig.Value.PriceMaximum,
                                 PriceMaxReduction = itemConfig.Value.PriceMaxReduction,
                                 PriceMinimum      = itemConfig.Value.PriceMinimum,
-                                UpshelfCount      = itemConfig.Value.UpshelfCount
+                                UpshelfCount      = itemConfig.Value.UpshelfCount,
+                                AnomalyDropRatio  = itemConfig.Value.AnomalyDropRatio
                             };
 
                             if (Module.config.ItemConfigs.TryAdd(newConfigStr, newConfig))
@@ -1212,6 +1213,17 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                 selectedItemConfig.UpshelfCount = originalUpshelfCount;
                 Module.SaveConfig(Module.config);
             }
+
+            var originalDropRatio = selectedItemConfig.AnomalyDropRatio;
+            ImGui.SetNextItemWidth(200f * GlobalUIScale);
+            ImGui.InputInt(GetLoc("AutoRetainerWork-PriceAdjust-AnomalyDropRatio"), ref originalDropRatio);
+
+            if (ImGui.IsItemDeactivatedAfterEdit())
+            {
+                selectedItemConfig.AnomalyDropRatio = Math.Clamp(originalDropRatio, 0, 99);
+                Module.SaveConfig(Module.config);
+            }
+            ImGuiOm.TooltipHover(GetLoc("AutoRetainerWork-PriceAdjust-AnomalyDropRatio-Help"));
 
             ImGuiOm.ScaledDummy(10f);
 
@@ -1649,18 +1661,18 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
             );
         }
 
-        private const double AnomalyDropRatio = 0.60;
-        private const uint   AnomalyMinGap    = 5;
-
         /// <summary>
         ///     过滤孤立的异常超低价格，返回合理的当前市场最低参考价
         /// </summary>
-        private static uint GetFinalMarketPrice(List<uint> prices)
+        private static uint GetFinalMarketPrice(List<uint> prices, int dropRatioPercent, uint minGap)
         {
             if (prices == null || prices.Count == 0) return 0;
             if (prices.Count == 1) return prices[0];
 
-            var skippedCount = 0;
+            var effectiveRatio  = dropRatioPercent <= 0 ? 60 : dropRatioPercent;
+            var dropRatio       = Math.Clamp(effectiveRatio, 1, 100) / 100.0;
+            var effectiveMinGap = minGap == 0 ? 5U : minGap;
+            var skippedCount    = 0;
             for (var i = 0; i < prices.Count - 1; i++)
             {
                 var current = prices[i];
@@ -1669,8 +1681,8 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
 
                 var gap = next - current;
 
-                // 如果相邻价格跌幅未达 60% 或绝对差额小于 5 Gil，说明 current 是合理的起始物价
-                if ((double)gap / next < AnomalyDropRatio || gap < AnomalyMinGap)
+                // 如果相邻价格跌幅未达设定阈值或绝对差额小于指定 Gil，说明 current 是合理的起始物价
+                if ((double)gap / next < dropRatio || gap < effectiveMinGap)
                     return current;
 
                 // 否则 current 属于孤立超低价，跳过 current 尝试下一个
@@ -1693,11 +1705,11 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
             var itemConfig = GetItemConfigByItemKey(itemMarketData.Value.Item);
 
             var finalMarketPrice = marketPrice;
-            if (forcePrice == 0)
+            if (forcePrice == 0 && itemConfig.AnomalyDropRatio > 0)
             {
                 if (PriceCacheManager.TryGetPricesCache(itemMarketData.Value.Item.ItemID, itemMarketData.Value.Item.IsHQ, out var prices))
                 {
-                    finalMarketPrice = GetFinalMarketPrice(prices);
+                    finalMarketPrice = GetFinalMarketPrice(prices, itemConfig.AnomalyDropRatio, 5);
                 }
             }
 
@@ -1857,6 +1869,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                 PriceMaxReduction = common.PriceMaxReduction,
                 PriceMinimum      = common.PriceMinimum,
                 UpshelfCount      = common.UpshelfCount,
+                AnomalyDropRatio  = common.AnomalyDropRatio,
             };
         }
 
@@ -3283,6 +3296,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
         public int PriceExpected { get; set; } = 200;
         public int PriceMaxReduction { get; set; }
         public int UpshelfCount { get; set; }
+        public int AnomalyDropRatio { get; set; } = 60;
 
         public Dictionary<AbortCondition, AbortBehavior> AbortLogic { get; set; } = [];
 
@@ -3392,6 +3406,10 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
             ("AutoRetainerWork-PriceAdjust-CacheCleared", false) => "Price cache has been cleared.",
             ("AutoRetainerWork-PriceAdjust-SendProcessMessage", true) => "通知自动改价详情",
             ("AutoRetainerWork-PriceAdjust-SendProcessMessage", false) => "Send Notification For Price Adjustment",
+            ("AutoRetainerWork-PriceAdjust-AnomalyDropRatio", true) => "判定跌幅 (%)",
+            ("AutoRetainerWork-PriceAdjust-AnomalyDropRatio", false) => "Drop Threshold (%)",
+            ("AutoRetainerWork-PriceAdjust-AnomalyDropRatio-Help", true) => "最低价相比次低价的降价幅度达到此阈值时判定为异常低价并跳过（设为 0 则不跳过，默认 60%）。",
+            ("AutoRetainerWork-PriceAdjust-AnomalyDropRatio-Help", false) => "Skipped as an abnormal low price when the price reduction from the next lowest reaches this threshold (set to 0 to disable, default 60%).",
             ("AutoRetainerWork-PriceAdjust-AutoAdjustWhenNewOnSale", true) => "自动指定出售价格",
             ("AutoRetainerWork-PriceAdjust-AutoAdjustWhenNewOnSale", false) => "Auto Price While Listing",
             ("AutoRetainerWork-PriceAdjust-AutoAdjustWhenNewOnSale-Help", true) => "上架商品时，仅可在“价格调整”界面内调整上架数量，点击“确认”后，将根据配置与市场时价自动指定出售价格。",
