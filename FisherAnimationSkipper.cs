@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -20,6 +21,9 @@ namespace DailyRoutines.ModulesPublic;
 public class FisherAnimationSkipper : ModuleBase
 {
     private const uint FisherJobID = 18;
+
+    private static readonly MethodInfo? ToggleGrmMethod =
+        typeof(GameResourceManager).GetMethod("Toggle", BindingFlags.Instance | BindingFlags.NonPublic);
 
     public override ModuleInfo Info => new()
     {
@@ -109,10 +113,16 @@ public class FisherAnimationSkipper : ModuleBase
         var animations = GetOrResolveAnimations();
         if (animations.Count == 0) return;
 
+        var grm = GameResourceManager.Instance();
         if (enable)
-            GameResourceManager.Instance().AddToBlacklist(typeof(FisherAnimationSkipper), animations);
+        {
+            grm.AddToBlacklist(typeof(FisherAnimationSkipper), animations);
+            ToggleGrmMethod?.Invoke(grm, [true]);
+        }
         else
-            GameResourceManager.Instance().RemoveFromBlacklist(typeof(FisherAnimationSkipper), animations);
+        {
+            grm.RemoveFromBlacklist(typeof(FisherAnimationSkipper), animations);
+        }
     }
 
     private HashSet<string> GetOrResolveAnimations()
@@ -121,8 +131,7 @@ public class FisherAnimationSkipper : ModuleBase
 
         var set = new HashSet<string>(128, StringComparer.OrdinalIgnoreCase);
         var sheet = LuminaGetter.Get<ActionTimeline>();
-        if (sheet == null)
-            return animationBlacklist = set;
+        if (sheet == null) return set;
 
         foreach (var row in sheet)
         {
