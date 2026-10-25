@@ -14,6 +14,7 @@ using Dalamud.Plugin.Services;
 
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 
 using OmenTools.Dalamud;
 using OmenTools.Extensions;
@@ -65,7 +66,8 @@ public unsafe class WondrousTailsPredictor : ModuleBase
 
         PrevMask = 0xFFFF;
         var addon = (AddonWeeklyBingo*)Addons.WeeklyBingo;
-        if (addon != null) UpdateProbabilities(addon);
+        if (addon != null && addon->RootNode != null)
+            UpdateProbabilities(addon);
     }
 
     protected override void Uninit()
@@ -84,6 +86,17 @@ public unsafe class WondrousTailsPredictor : ModuleBase
 
     private void UpdateProbabilities(AddonWeeklyBingo* addon)
     {
+        if (addon == null || addon->RootNode == null) return;
+
+        var lineOneNode = addon->GetTextNodeById(78);
+        if (lineOneNode == null) return;
+
+        var lineTwoNode = addon->GetTextNodeById(89);
+        if (lineTwoNode == null) return;
+
+        var lineThreeNode = addon->GetTextNodeById(100);
+        if (lineThreeNode == null) return;
+
         var player = PlayerState.Instance();
         if (player == null || !player->HasWeeklyBingoJournal) return;
 
@@ -102,19 +115,24 @@ public unsafe class WondrousTailsPredictor : ModuleBase
         PrevMask = currentMask;
 
         var prob = CalculateExactProbabilities(currentMask, stickers);
-        addon->GetTextNodeById(78)->SetText(BuildLineText(BaseTitles[0], prob.Line1, 0.70));
-        addon->GetTextNodeById(89)->SetText(BuildLineText(BaseTitles[1], prob.Line2, 0.20));
-        addon->GetTextNodeById(100)->SetText(BuildLineText(BaseTitles[2], prob.Line3, 0.05));
+        lineOneNode->SetText(BuildLineText(BaseTitles[0], prob.Line1, 0.70));
+        lineTwoNode->SetText(BuildLineText(BaseTitles[1], prob.Line2, 0.20));
+        lineThreeNode->SetText(BuildLineText(BaseTitles[2], prob.Line3, 0.05));
     }
 
     private static void RestoreAddon()
     {
         var addon = (AddonWeeklyBingo*)Addons.WeeklyBingo;
-        if (addon == null) return;
+        if (addon == null || addon->RootNode == null) return;
 
-        addon->GetTextNodeById(78)->SetText(BaseTitles[0]);
-        addon->GetTextNodeById(89)->SetText(BaseTitles[1]);
-        addon->GetTextNodeById(100)->SetText(BaseTitles[2]);
+        var node1 = addon->GetTextNodeById(78);
+        if (node1 != null) node1->SetText(BaseTitles[0]);
+
+        var node2 = addon->GetTextNodeById(89);
+        if (node2 != null) node2->SetText(BaseTitles[1]);
+
+        var node3 = addon->GetTextNodeById(100);
+        if (node3 != null) node3->SetText(BaseTitles[2]);
     }
 
     private static byte[] BuildLineText(string title, double val, double highThreshold)
