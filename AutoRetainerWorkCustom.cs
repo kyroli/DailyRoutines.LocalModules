@@ -3237,17 +3237,14 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
         public bool  SendPriceAdjustProcessMessage = true;
     }
 
-    public class ItemKey : IEquatable<ItemKey>
+    public class ItemKey
+    (
+        uint itemID,
+        bool isHQ
+    ) : IEquatable<ItemKey>
     {
-        public ItemKey() { }
-        public ItemKey(uint itemID, bool isHQ)
-        {
-            ItemID = itemID;
-            IsHQ   = isHQ;
-        }
-
-        public uint ItemID { get; set; }
-        public bool IsHQ   { get; set; }
+        public uint ItemID { get; } = itemID;
+        public bool IsHQ   { get; } = isHQ;
 
         public bool Equals(ItemKey? other)
         {
@@ -3280,9 +3277,9 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                            LuminaGetter.GetRow<Item>(ItemID)?.Name.ToString() ?? string.Empty;
         }
 
-        public uint   ItemID   { get; set; }
-        public bool   IsHQ     { get; set; }
-        public string ItemName { get; set; } = string.Empty;
+        public uint   ItemID   { get; init; }
+        public bool   IsHQ     { get; init; }
+        public string ItemName { get; init; } = string.Empty;
 
         public AdjustBehavior AdjustBehavior { get; set; } = AdjustBehavior.固定值;
         public Dictionary<AdjustBehavior, int> AdjustValues { get; set; } = new()
