@@ -102,7 +102,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
             new PriceAdjustWorker(this)
         ];
 
-        config = LoadConfig<Config>() ?? new();
+        config = Config.Load(this) ?? new();
 
         foreach (var worker in workers)
             worker.Init();

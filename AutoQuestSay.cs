@@ -80,6 +80,9 @@ public unsafe class AutoQuestSay : ModuleBase
 
     protected override void Uninit()
     {
+        InteractWithObjectHook?.Dispose();
+        InteractWithObjectHook = null;
+
         DialogueSheets.Clear();
         LastMountedTime = 0;
     }

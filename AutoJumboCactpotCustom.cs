@@ -45,7 +45,7 @@ public class AutoJumboCactpotCustom : ModuleBase
 
     protected override unsafe void Init()
     {
-        config = LoadConfig<Config>() ?? new();
+        config = Config.Load(this) ?? new();
 
         Loc = IClientState.Instance().ClientLanguage switch
         {
@@ -86,7 +86,7 @@ public class AutoJumboCactpotCustom : ModuleBase
                     if (ImGui.Selectable(modeName, modeKey == config.NumberMode))
                     {
                         config.NumberMode = modeKey;
-                        SaveConfig(config);
+                        config.Save(this);
                     }
                 }
             }
@@ -101,7 +101,7 @@ public class AutoJumboCactpotCustom : ModuleBase
             if (ImGui.IsItemDeactivatedAfterEdit())
             {
                 config.FixedNumber = Math.Clamp(config.FixedNumber, 0, 9999);
-                SaveConfig(config);
+                config.Save(this);
             }
         }
         else if (config.NumberMode == Mode.RandomOnce)

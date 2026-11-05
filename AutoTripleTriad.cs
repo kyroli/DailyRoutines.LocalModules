@@ -16,6 +16,7 @@ using FFXIVClientStructs.FFXIV.Client.UI;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using OmenTools;
 using OmenTools.Dalamud;
 using OmenTools.Extensions;
@@ -96,7 +97,7 @@ public unsafe class AutoTripleTriad : ModuleBase
             if (ImGui.Button(GetLoc("StopAuto")))
             {
                 config.EnableTripleTriad = false;
-                SaveConfig(config);
+                config.Save(this);
             }
             
             ImGui.Spacing();
@@ -113,13 +114,13 @@ public unsafe class AutoTripleTriad : ModuleBase
         if (ImGui.Checkbox(GetLoc("StopAllCol"), ref config.PlayUntilAllUnownedCardsDrop))
         {
             if (config.PlayUntilAllUnownedCardsDrop) config.PlayXTimes = false;
-            SaveConfig(config);
+            config.Save(this);
         }
         
         if (ImGui.Checkbox(GetLoc("PlayX"), ref config.PlayXTimes))
         {
             if (config.PlayXTimes) config.PlayUntilAllUnownedCardsDrop = false;
-            SaveConfig(config);
+            config.Save(this);
         }
         
         if (config.PlayXTimes)
@@ -130,12 +131,12 @@ public unsafe class AutoTripleTriad : ModuleBase
             if (ImGui.IsItemDeactivatedAfterEdit())
             {
                 if (config.TimesToPlay < 1) config.TimesToPlay = 1;
-                SaveConfig(config);
+                config.Save(this);
             }
             ImGui.Unindent();
         }
 
-        if (ImGui.Checkbox(GetLoc("RecDeck"), ref config.UseRecommendedDeck)) SaveConfig(config);
+        if (ImGui.Checkbox(GetLoc("RecDeck"), ref config.UseRecommendedDeck)) config.Save(this);
         if (!config.UseRecommendedDeck)
         {
             ImGui.Indent();
@@ -144,7 +145,7 @@ public unsafe class AutoTripleTriad : ModuleBase
             if (ImGui.IsItemDeactivatedAfterEdit())
             {
                 config.SelectedDeck = Math.Clamp(config.SelectedDeck, 1, 10);
-                SaveConfig(config);
+                config.Save(this);
             }
             ImGui.Unindent();
         }
@@ -168,7 +169,7 @@ public unsafe class AutoTripleTriad : ModuleBase
 
     protected override void Init()
     {
-        config = LoadConfig<Config>() ?? new Config();
+        config = Config.Load(this) ?? new();
         isReflectionInitialized = false;
         isCN = IClientState.Instance().ClientLanguage == ClientLanguage.ChineseSimplified;
 
@@ -213,7 +214,7 @@ public unsafe class AutoTripleTriad : ModuleBase
         if (config.EnableTripleTriad)
         {
             config.EnableTripleTriad = false;
-            SaveConfig(config);
+            config.Save(this);
         }
 
         solverGameCurrentNPCField = null;
@@ -348,7 +349,7 @@ public unsafe class AutoTripleTriad : ModuleBase
                 if (config.EnableTripleTriad)
                 {
                     config.EnableTripleTriad = false;
-                    SaveConfig(config);
+                    config.Save(this);
                 }
             }
         }
@@ -365,7 +366,7 @@ public unsafe class AutoTripleTriad : ModuleBase
             {
                 config.EnableTripleTriad = true;
                 matchCount = 0;
-                SaveConfig(config);
+                config.Save(this);
             }
             lastPrepCloseTime = 0;
         }
@@ -440,7 +441,7 @@ public unsafe class AutoTripleTriad : ModuleBase
             if (config.PlayXTimes && matchCount >= config.TimesToPlay)
             {
                 config.EnableTripleTriad = false;
-                SaveConfig(config);
+                config.Save(this);
                 IChatGui.Instance().Print(GetLoc("DoneCount"));
 
                 var selectString = (AddonSelectString*)addon;
@@ -541,7 +542,7 @@ public unsafe class AutoTripleTriad : ModuleBase
             {
                 config.EnableTripleTriad = false;
                 isExitingFromCompletion = true;
-                SaveConfig(config);
+                config.Save(this);
                 var values = stackalloc AtkValue[2];
                 values[0].Type = AtkValueType.Int;
                 values[0].Int = 0;
