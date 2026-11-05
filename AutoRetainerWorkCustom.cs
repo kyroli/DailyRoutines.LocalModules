@@ -62,7 +62,7 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe partial class AutoRetainerWorkCustom : ModuleBase
 {
-    public override ModuleInfo Info => new()
+    public override ModuleInfo Info { get; } = new()
     {
         Title = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified
                     ? "自动雇员作业(改)"
@@ -114,11 +114,11 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
             Size         = new(260f, 320f),
         };
 
-        DService.Instance().Condition.ConditionChange   += OnConditionChanged;
-        DService.Instance().ClientState.Logout           += OnLogout;
-        DService.Instance().ClientState.TerritoryChanged += OnTerritoryChanged;
+        ICondition.Instance().ConditionChange    += OnConditionChanged;
+        GameState.Instance().Logout              += OnLogout;
+        IClientState.Instance().TerritoryChanged += OnTerritoryChanged;
 
-        if (DService.Instance().Condition[ConditionFlag.OccupiedSummoningBell])
+        if (ICondition.Instance()[ConditionFlag.OccupiedSummoningBell])
             EnableTalkSkipIfDisabled();
     }
 
@@ -133,9 +133,9 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
         foreach (var worker in workers)
             worker.Uninit();
 
-        DService.Instance().Condition.ConditionChange   -= OnConditionChanged;
-        DService.Instance().ClientState.Logout           -= OnLogout;
-        DService.Instance().ClientState.TerritoryChanged -= OnTerritoryChanged;
+        ICondition.Instance().ConditionChange    -= OnConditionChanged;
+        GameState.Instance().Logout              -= OnLogout;
+        IClientState.Instance().TerritoryChanged -= OnTerritoryChanged;
 
         DisableTalkSkipIfAutoEnabled();
     }
@@ -153,7 +153,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
         }
     }
 
-    private static void OnLogout(int type, int code) => DisableTalkSkipIfAutoEnabled();
+    private static void OnLogout() => DisableTalkSkipIfAutoEnabled();
 
     private static void OnTerritoryChanged(uint territoryType) => DisableTalkSkipIfAutoEnabled();
 

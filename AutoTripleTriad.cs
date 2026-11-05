@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Game;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Plugin.Services;
@@ -35,10 +36,10 @@ public unsafe class AutoTripleTriad : ModuleBase
         public int SelectedDeck = 1;
     }
 
-    public override ModuleInfo Info => new()
+    public override ModuleInfo Info { get; } = new()
     {
-        Title = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "九宫幻卡自动化" : "Auto Triple Triad",
-        Description = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "自动与 NPC 进行九宫幻卡连续对战。\n支持直到集齐未拥有卡牌后停止、完成指定次数后停止，以及自动读取胜率最高的卡组。\n※ 本模块仅作交互辅助，【必须】配合并加载外部插件 TriadBuddy 才能正常工作。" : "Auto play Triple Triad matches continuously.\nSupports stopping after collecting all cards, reaching target count, and auto recommended deck.\n※ This is only an interaction helper. MUST load external plugin TriadBuddy to work.",
+        Title = IClientState.Instance().ClientLanguage == ClientLanguage.ChineseSimplified ? "九宫幻卡自动化" : "Auto Triple Triad",
+        Description = IClientState.Instance().ClientLanguage == ClientLanguage.ChineseSimplified ? "自动与 NPC 进行九宫幻卡连续对战。\n支持直到集齐未拥有卡牌后停止、完成指定次数后停止，以及自动读取胜率最高的卡组。\n※ 本模块仅作交互辅助，【必须】配合并加载外部插件 TriadBuddy 才能正常工作。" : "Auto play Triple Triad matches continuously.\nSupports stopping after collecting all cards, reaching target count, and auto recommended deck.\n※ This is only an interaction helper. MUST load external plugin TriadBuddy to work.",
         Category = ModuleCategory.GoldSaucer,
         Author = ["nynpsu"],
         ReportURL = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
@@ -55,17 +56,11 @@ public unsafe class AutoTripleTriad : ModuleBase
     private long lastSelDeckTime = 0;
     private long resultShowTime = 0;
     private long lastResultActionTime = 0;
-
-    private const int PlayerTurnAtkValueIndex = 23;
-    private const int MovePlacementGraceMS    = 150;
-
     private long moveAvailableTime = 0;
+    private bool isCardToItemMapInitialized = false;
 
-    // Reflection caching
     private FieldInfo? solverGameStaticField;
     private FieldInfo? solverPreGameDecksStaticField;
-
-    // Caching reflection members for performance
     private FieldInfo? solverGameCurrentNPCField;
     private PropertyInfo? solverGameHasErrorsProp;
     private FieldInfo? solverGameStatusField;
@@ -131,7 +126,8 @@ public unsafe class AutoTripleTriad : ModuleBase
         {
             ImGui.Indent();
             ImGui.SetNextItemWidth(100f * GlobalUIScale);
-            if (ImGui.InputInt(GetLoc("TargetX"), ref config.TimesToPlay))
+            ImGui.InputInt(GetLoc("TargetX"), ref config.TimesToPlay);
+            if (ImGui.IsItemDeactivatedAfterEdit())
             {
                 if (config.TimesToPlay < 1) config.TimesToPlay = 1;
                 SaveConfig(config);
@@ -144,9 +140,10 @@ public unsafe class AutoTripleTriad : ModuleBase
         {
             ImGui.Indent();
             ImGui.SetNextItemWidth(100f * GlobalUIScale);
-            if (ImGui.InputInt(GetLoc("ManualDeck"), ref config.SelectedDeck))
+            ImGui.InputInt(GetLoc("ManualDeck"), ref config.SelectedDeck);
+            if (ImGui.IsItemDeactivatedAfterEdit())
             {
-                config.SelectedDeck = Math.Max(1, Math.Min(10, config.SelectedDeck));
+                config.SelectedDeck = Math.Clamp(config.SelectedDeck, 1, 10);
                 SaveConfig(config);
             }
             ImGui.Unindent();
@@ -173,7 +170,7 @@ public unsafe class AutoTripleTriad : ModuleBase
     {
         config = LoadConfig<Config>() ?? new Config();
         isReflectionInitialized = false;
-        isCN = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified;
+        isCN = IClientState.Instance().ClientLanguage == ClientLanguage.ChineseSimplified;
 
         IFramework.Instance().Update += OnUpdate;
 
@@ -213,10 +210,12 @@ public unsafe class AutoTripleTriad : ModuleBase
         cardToItemMap.Clear();
         isCardToItemMapInitialized = false;
 
-        config.EnableTripleTriad = false;
-        SaveConfig(config);
+        if (config.EnableTripleTriad)
+        {
+            config.EnableTripleTriad = false;
+            SaveConfig(config);
+        }
 
-        // 清理缓存反射变量
         solverGameCurrentNPCField = null;
         solverGameHasErrorsProp = null;
         solverGameStatusField = null;
@@ -268,7 +267,6 @@ public unsafe class AutoTripleTriad : ModuleBase
             const BindingFlags instanceFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.IgnoreCase;
             const BindingFlags staticFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.IgnoreCase;
 
-            // SolverGame fields & properties
             solverGameCurrentNPCField = solverGameType.GetField("currentNpc", instanceFlags);
             solverGameHasErrorsProp = solverGameType.GetProperty("HasErrors", instanceFlags);
             solverGameStatusField = solverGameType.GetField("status", instanceFlags);
@@ -276,23 +274,19 @@ public unsafe class AutoTripleTriad : ModuleBase
             solverGameMoveCardIdxField = solverGameType.GetField("moveCardIdx", instanceFlags);
             solverGameMoveBoardIdxField = solverGameType.GetField("moveBoardIdx", instanceFlags);
 
-            // SolverPreGameDecks fields & properties
             solverPreGameNPCField = solverPreGameDecksType.GetField("preGameNpc", instanceFlags);
             solverPreGameProgressProp = solverPreGameDecksType.GetProperty("preGameProgress", instanceFlags);
             solverPreGameBestIDField = solverPreGameDecksType.GetField("preGameBestId", instanceFlags);
 
-            // GameNpcDB methods & fields
             gameNPCDBGetMethod = gameNPCDBType.GetMethod("Get", staticFlags);
             gameNPCDBMapNPCsField = gameNPCDBType.GetField("mapNpcs", instanceFlags);
 
-            // GameNpcInfo / NPC fields
             var triadNPCType = assembly.GetType("FFTriadBuddy.TriadNpc");
             if (triadNPCType == null) return false;
 
             triadNPCIDField = triadNPCType.GetField("Id", instanceFlags);
             gameNPCInfoRewardCardsField = gameNPCInfoType.GetField("rewardCards", instanceFlags);
 
-            // 验证必需的反射字段与属性
             if (solverGameCurrentNPCField == null || solverGameHasErrorsProp == null || solverGameHasMoveField == null ||
                 solverGameMoveCardIdxField == null || solverGameMoveBoardIdxField == null ||
                 solverPreGameNPCField == null || solverPreGameProgressProp == null || solverPreGameBestIDField == null ||
@@ -313,7 +307,6 @@ public unsafe class AutoTripleTriad : ModuleBase
 
     public void OnUpdate(IFramework framework)
     {
-        if (config == null) return;
         if (!isTriadUIActive && !wasAnyTriadUIOpen) return;
 
         var prepAddon = (AtkUnitBase*)IGameGui.Instance().GetAddonByName("TripleTriadRequest").Address;
@@ -511,10 +504,6 @@ public unsafe class AutoTripleTriad : ModuleBase
 
                                     var rewardCards = (System.Collections.IEnumerable)gameNPCInfoRewardCardsField!.GetValue(npcInfo)!;
                                     if (rewardCards == null) return;
-                                    
-                                    // 使用 UIState 内存直读判断卡牌拥有状态，替代反射 GameCardDB
-                                    var uiState = UIState.Instance();
-                                    if (uiState == null) return;
                                     
                                     bool allCardsOwned = true;
                                     foreach (int cardID in rewardCards)
@@ -794,16 +783,13 @@ public unsafe class AutoTripleTriad : ModuleBase
         };
     }
 
-    private bool isCardToItemMapInitialized = false;
-
     private unsafe bool IsCardOwned(ushort cardID)
     {
         if (cardID == 0) return false;
 
         try
         {
-            var uiState = UIState.Instance();
-            if (uiState != null && uiState->IsTripleTriadCardUnlocked(cardID))
+            if (UIState.Instance()->IsTripleTriadCardUnlocked(cardID))
             {
                 return true;
             }
@@ -816,13 +802,10 @@ public unsafe class AutoTripleTriad : ModuleBase
         try
         {
             EnsureCardToItemMapInitialized();
-            var inventoryManager = InventoryManager.Instance();
-            if (inventoryManager != null && cardToItemMap.TryGetValue(cardID, out var itemID))
+            if (cardToItemMap.TryGetValue(cardID, out var itemID) &&
+                InventoryManager.Instance()->GetInventoryItemCount(itemID) > 0)
             {
-                if (inventoryManager->GetInventoryItemCount(itemID) > 0)
-                {
-                    return true;
-                }
+                return true;
             }
         }
         catch (Exception ex)
@@ -870,4 +853,11 @@ public unsafe class AutoTripleTriad : ModuleBase
             DLog.Error("AutoTripleTriad: 初始化卡牌物品映射失败", ex);
         }
     }
+
+    #region 常量
+
+    private const int PlayerTurnAtkValueIndex = 23;
+    private const int MovePlacementGraceMS    = 150;
+
+    #endregion
 }

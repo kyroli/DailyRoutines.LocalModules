@@ -25,10 +25,10 @@ namespace DailyRoutines.ModulesPublic;
 
 public class AutoJumboCactpotCustom : ModuleBase
 {
-    public override ModuleInfo Info => new()
+    public override ModuleInfo Info { get; } = new()
     {
-        Title       = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "自动每周仙人仙彩(改)" : "Auto Jumbo Cactpot (Custom)",
-        Description = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "基于官方同名模块修改，自动购买并选择每周仙人仙彩号码。\n※ 增加了“一号多买”模式：首张票随机生成，15 秒内购买的后续票自动沿用该号码。" : "Automatically purchases and selects Jumbo Cactpot numbers.\n※ Added 'Synchronized' mode: the first ticket is random, and purchases within 15 seconds reuse that number.",
+        Title       = IClientState.Instance().ClientLanguage == ClientLanguage.ChineseSimplified ? "自动每周仙人仙彩(改)" : "Auto Jumbo Cactpot (Custom)",
+        Description = IClientState.Instance().ClientLanguage == ClientLanguage.ChineseSimplified ? "基于官方同名模块修改，自动购买并选择每周仙人仙彩号码。\n※ 增加了“一号多买”模式：首张票随机生成，15 秒内购买的后续票自动沿用该号码。" : "Automatically purchases and selects Jumbo Cactpot numbers.\n※ Added 'Synchronized' mode: the first ticket is random, and purchases within 15 seconds reuse that number.",
         Category    = ModuleCategory.GoldSaucer,
         Author      = ["AtmoOmen", "nynpsu"],
         ReportURL   = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
@@ -39,9 +39,7 @@ public class AutoJumboCactpotCustom : ModuleBase
 
     private Config config = null!;
     private FrozenDictionary<Mode, string> NumberModeLoc = FrozenDictionary<Mode, string>.Empty;
-    
-    // “一号多买”: 以 15 秒滑动窗口近似“同一批购买”。
-    // 首张票随机生成号码, 窗口内再次购买则沿用该号码; 超过 15 秒未再开界面视为新的一批, 重新生成。
+
     private int  sessionRandomNumber = -1;
     private long lastExecuteTime     = 0;
 
@@ -51,7 +49,7 @@ public class AutoJumboCactpotCustom : ModuleBase
 
         Loc = IClientState.Instance().ClientLanguage switch
         {
-            Dalamud.Game.ClientLanguage.ChineseSimplified => new(
+            ClientLanguage.ChineseSimplified => new(
                 "选号模式", "完全随机", "固定号码", "一号多买", "指定号码", "(首张随机；15 秒内再次购买沿用同一号码)"),
             _ => new(
                 "Selection Mode", "Fully Random", "Fixed Number", "Synchronized", "Input Number", "(Randomize first; purchases within 15 seconds share the number)")
@@ -98,7 +96,9 @@ public class AutoJumboCactpotCustom : ModuleBase
         {
             ImGui.SameLine();
             ImGui.SetNextItemWidth(100f * GlobalUIScale);
-            if (ImGui.InputInt($"##{Loc.InputNumber}", ref config.FixedNumber))
+            ImGui.InputInt($"##{Loc.InputNumber}", ref config.FixedNumber);
+
+            if (ImGui.IsItemDeactivatedAfterEdit())
             {
                 config.FixedNumber = Math.Clamp(config.FixedNumber, 0, 9999);
                 SaveConfig(config);
@@ -148,7 +148,6 @@ public class AutoJumboCactpotCustom : ModuleBase
 
     private int GetOrGenerateSessionNumber(long currentTime)
     {
-        // 距上次购买超过 15 秒即视为新的一批, 重新随机号码
         if (currentTime - lastExecuteTime > 15000 || sessionRandomNumber == -1)
         {
             sessionRandomNumber = Random.Shared.Next(0, 10000);

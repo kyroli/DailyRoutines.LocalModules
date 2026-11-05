@@ -7,10 +7,12 @@ using System.Runtime.InteropServices;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
+using Dalamud.Game;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.GoldSaucer;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Dalamud.Bindings.ImGui;
 using OmenTools;
@@ -20,6 +22,7 @@ using OmenTools.Extensions;
 using OmenTools.OmenService;
 using OmenTools.Threading;
 using IGameObject = OmenTools.Dalamud.Services.Game.Object.Abstractions.ObjectKinds.IGameObject;
+using IObjectTable = OmenTools.Dalamud.Services.Game.Object.Abstractions.IObjectTable;
 using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
 using static OmenTools.Info.Game.Data.Addons;
 
@@ -27,10 +30,10 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class GoldSaucerGATEsHelper : ModuleBase
 {
-    public override ModuleInfo Info => new()
+    public override ModuleInfo Info { get; } = new()
     {
-        Title = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified ? "金碟机遇临门辅助" : "Gold Saucer GATEs Helper",
-        Description = IClientState.Instance().ClientLanguage == Dalamud.Game.ClientLanguage.ChineseSimplified 
+        Title = IClientState.Instance().ClientLanguage == ClientLanguage.ChineseSimplified ? "金碟机遇临门辅助" : "Gold Saucer GATEs Helper",
+        Description = IClientState.Instance().ClientLanguage == ClientLanguage.ChineseSimplified 
             ? "1. 喷风中的幸存者：提示被吹飞概率最小的站位。\n2. 必中一闪快刀斩魔：显示竹子的倒向范围。\n3. 空军装甲驾驶员：自动瞄准并射击目标。\n※ 部分功能移植自 Saucy 插件。" 
             : "1. Any Way the Wind Blows: Shows safest spot.\n2. The Slice Is Right: Shows bamboo fall area.\n3. Air Force One: Automatically shoots targets.\n※ Partially based on Saucy.",
         Category = ModuleCategory.GoldSaucer,
@@ -38,52 +41,17 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
         ReportURL = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
     };
 
-    // --- Any Way the Wind Blows 常量 ---
-    private static readonly Vector3 SafeSpot = new(66.96f, -4.48f, -24.69f);
-    private const float DotRadius = 6f;
-
-    // --- Slice Is Right 常量 ---
-    private static float HalfPi => MathF.PI / 2f;
-    private const float MaxDistanceSquared = 30f * 30f;
-
-    private const uint GimmickSingleRect = 2010777;
-    private const uint GimmickDoubleRect = 2010778;
-    private const uint GimmickCircle     = 2010779;
-
-    // 部分镰刀预警对象以辅助 OID 形式出现, 需要映射回对应的 Gimmick 类型
-    private const uint HelperSingleRectOID = 0x1EAE99;
-    private const uint HelperDoubleRectOID = 0x1EAE9A;
-    private const uint HelperCircleOID     = 0x1EAE9B;
-
-    private readonly Dictionary<ulong, long> objectSpawnTimes = [];
-
-    // --- 缓存数据 ---
-    private readonly List<IGameObject> activeSliceObjects = [];
-    private readonly List<ulong> toRemoveList = [];
-
-    // --- 共享颜色 (ABGR Hex) ---
-    private const uint ColourWindGreen  = 0xFF00FF00;
-    private const uint ColourWindRed    = 0xFF0000FF;
-    private const uint ColourSliceBlue  = 0x26FF0000;
-    private const uint ColourSliceGreen = 0x2600FF00;
-    private const uint ColourSliceRed   = 0x660000FF;
-
-    // --- 预计算数据 ---
-    private static readonly float[] CircleSins = new float[40];
-    private static readonly float[] CircleCoses = new float[40];
-
-    // --- Air Force One 常量与状态字段 ---
-    private const int NativeShotIntervalMS = 250;
-    private const int MaxTargetWalk = 128;
-    private const string FireCachedTargetSig = "48 8B C4 53 48 81 EC ?? ?? ?? ?? 0F 29 70 ?? 0F 57 C9 0F 29 78 ?? 48 8B D9 F3 0F 10 B9 ?? ?? ?? ?? BA FF FF 00 00";
-
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate nint FireCachedTargetDelegate(nint context);
 
-    private bool wasInDuty;
-    private AtkUnitBase* rideShootingAddon;
+    private readonly Dictionary<ulong, long> objectSpawnTimes   = [];
+    private readonly List<IGameObject>       activeSliceObjects = [];
+    private readonly List<ulong>             toRemoveList       = [];
+
+    private bool                      wasInDuty;
+    private AtkUnitBase*              rideShootingAddon;
     private FireCachedTargetDelegate? fireCachedTarget;
-    private long lastShotAt;
+    private long                      lastShotAt;
 
     private static bool IsTelegraphVisible(long firstSeen) =>
         Environment.TickCount64 - firstSeen is >= 5000 and < 12000;
@@ -177,7 +145,6 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
         objectSpawnTimes.Clear();
         activeSliceObjects.Clear();
 
-        // 仅在金碟娱乐场（144）启用
         if (territory == 144)
             WindowManager.Instance().PostDraw += OnDraw;
     }
@@ -210,7 +177,7 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
             if (Throttler<string>.Shared.Throttle("GoldSaucerGATEsHelper_SliceCheck", 50))
             {
                 activeSliceObjects.Clear();
-                foreach (var obj in DService.Instance().ObjectTable)
+                foreach (var obj in IObjectTable.Instance())
                 {
                     if (TryGetSliceHelperType(obj, out _))
                     {
@@ -225,7 +192,7 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
 
     private unsafe void DrawAnyWayTheWindBlows(GFateDirector* dir)
     {
-        var player = DService.Instance().ObjectTable.LocalPlayer;
+        var player = LocalPlayerState.Object;
         if (player == null) return;
         if (!dir->Flags.HasFlag(GFateDirectorFlag.IsJoined) || dir->Flags.HasFlag(GFateDirectorFlag.IsFinished)) return;
 
@@ -267,7 +234,7 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
 
     private void DrawSliceIsRight()
     {
-        var localPlayer = DService.Instance().ObjectTable.LocalPlayer;
+        var localPlayer = LocalPlayerState.Object;
         if (localPlayer == null) return;
 
         foreach (var obj in activeSliceObjects)
@@ -424,13 +391,13 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
         DLog.Debug("[GoldSaucerGATEsHelper] Exited Air Force One Duty. Unregistered framework update and cleaned states.");
     }
 
-    private void OnFrameworkUpdate(Dalamud.Plugin.Services.IFramework framework)
+    private void OnFrameworkUpdate(IFramework framework)
     {
         if (rideShootingAddon == null || !rideShootingAddon->IsAddonAndNodesReady()) return;
         if (fireCachedTarget == null) return;
 
         var now = Environment.TickCount64;
-        if (now - lastShotAt < NativeShotIntervalMS) return;
+        if (now - lastShotAt < ShotIntervalMS) return;
 
         var agent = AgentRideShooting.TryGet();
         if (agent == null) return;
@@ -484,19 +451,48 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
     [StructLayout(LayoutKind.Explicit, Size = 0x38)]
     private struct AgentRideShooting
     {
-        [FieldOffset(0x00)] public FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentInterface AgentInterface;
+        [FieldOffset(0x00)] public AgentInterface AgentInterface;
         [FieldOffset(0x30)] public nint AddonEventInterface;
 
         public nint GetContext() => AddonEventInterface != 0 ? AddonEventInterface - 0x20 : 0;
 
         public static AgentRideShooting* TryGet()
         {
-            var module = FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentModule.Instance();
+            var module = AgentModule.Instance();
             if (module == null) return null;
 
-            return (AgentRideShooting*)module->GetAgentByInternalId(FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentId.RideShooting);
+            return (AgentRideShooting*)module->GetAgentByInternalId(AgentId.RideShooting);
         }
     }
+
+    #endregion
+
+    #region 常量
+
+    private static readonly Vector3 SafeSpot    = new(66.96f, -4.48f, -24.69f);
+    private static readonly float[] CircleSins  = new float[40];
+    private static readonly float[] CircleCoses = new float[40];
+
+    private const float DotRadius          = 6f;
+    private const float HalfPi             = MathF.PI / 2f;
+    private const float MaxDistanceSquared = 30f * 30f;
+
+    private const uint GimmickSingleRect   = 2010777;
+    private const uint GimmickDoubleRect   = 2010778;
+    private const uint GimmickCircle       = 2010779;
+    private const uint HelperSingleRectOID = 0x1EAE99;
+    private const uint HelperDoubleRectOID = 0x1EAE9A;
+    private const uint HelperCircleOID     = 0x1EAE9B;
+
+    private const uint ColourWindGreen  = 0xFF00FF00;
+    private const uint ColourWindRed    = 0xFF0000FF;
+    private const uint ColourSliceBlue  = 0x26FF0000;
+    private const uint ColourSliceGreen = 0x2600FF00;
+    private const uint ColourSliceRed   = 0x660000FF;
+
+    private const int    ShotIntervalMS      = 250;
+    private const int    MaxTargetWalk       = 128;
+    private const string FireCachedTargetSig = "48 8B C4 53 48 81 EC ?? ?? ?? ?? 0F 29 70 ?? 0F 57 C9 0F 29 78 ?? 48 8B D9 F3 0F 10 B9 ?? ?? ?? ?? BA FF FF 00 00";
 
     #endregion
 }

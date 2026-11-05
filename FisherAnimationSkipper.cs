@@ -2,14 +2,17 @@
 
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Manager;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game;
+using Dalamud.Hooking;
 using Dalamud.Plugin.Services;
+using FFXIVClientStructs.FFXIV.Client.System.Resource;
+using FFXIVClientStructs.FFXIV.Client.System.Resource.Handle;
+using InteropGenerator.Runtime;
 using Lumina.Excel.Sheets;
 using OmenTools.Dalamud;
 using OmenTools.Extensions;
@@ -18,14 +21,9 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class FisherAnimationSkipper : ModuleBase
+public unsafe class FisherAnimationSkipper : ModuleBase
 {
-    private const uint FisherJobID = 18;
-
-    private static readonly MethodInfo? ToggleGrmMethod =
-        typeof(GameResourceManager).GetMethod("Toggle", BindingFlags.Instance | BindingFlags.NonPublic);
-
-    public override ModuleInfo Info => new()
+    public override ModuleInfo Info { get; } = new()
     {
         Title       = IClientState.Instance().ClientLanguage == ClientLanguage.ChineseSimplified ? "捕鱼人动画跳过" : "Fisher Animation Skipper",
         Description = IClientState.Instance().ClientLanguage == ClientLanguage.ChineseSimplified ? "跳过大部分钓鱼动画演出。" : "Skips most fishing animations.",
@@ -38,6 +36,8 @@ public class FisherAnimationSkipper : ModuleBase
 
     private bool isSkipperEnabled;
     private HashSet<string>? animationBlacklist;
+    private Hook<ResourceManager.Delegates.GetResourceSync>?  getResourceSyncHook;
+    private Hook<ResourceManager.Delegates.GetResourceAsync>? getResourceAsyncHook;
 
     #endregion
 
@@ -45,9 +45,19 @@ public class FisherAnimationSkipper : ModuleBase
 
     protected override void Init()
     {
+        getResourceSyncHook = IGameInteropProvider.Instance().HookFromMemberFunction(
+            typeof(ResourceManager.MemberFunctionPointers),
+            "GetResourceSync",
+            (ResourceManager.Delegates.GetResourceSync)GetResourceSyncDetour);
+
+        getResourceAsyncHook = IGameInteropProvider.Instance().HookFromMemberFunction(
+            typeof(ResourceManager.MemberFunctionPointers),
+            "GetResourceAsync",
+            (ResourceManager.Delegates.GetResourceAsync)GetResourceAsyncDetour);
+
         IClientState.Instance().ClassJobChanged += OnJobChanged;
 
-        if (IClientState.Instance().IsLoggedIn)
+        if (GameState.IsLoggedIn)
             OnJobChanged(LocalPlayerState.ClassJob);
     }
 
@@ -55,6 +65,12 @@ public class FisherAnimationSkipper : ModuleBase
     {
         IClientState.Instance().ClassJobChanged -= OnJobChanged;
         ResetState();
+
+        getResourceSyncHook?.Dispose();
+        getResourceSyncHook = null;
+
+        getResourceAsyncHook?.Dispose();
+        getResourceAsyncHook = null;
     }
 
     #endregion
@@ -110,19 +126,54 @@ public class FisherAnimationSkipper : ModuleBase
 
     private void ApplyFilterState(bool enable)
     {
-        var animations = GetOrResolveAnimations();
-        if (animations.Count == 0) return;
-
-        var grm = GameResourceManager.Instance();
         if (enable)
         {
-            grm.AddToBlacklist(typeof(FisherAnimationSkipper), animations);
-            ToggleGrmMethod?.Invoke(grm, [true]);
+            if (GetOrResolveAnimations().Count == 0) return;
+
+            getResourceSyncHook?.Enable();
+            getResourceAsyncHook?.Enable();
         }
         else
         {
-            grm.RemoveFromBlacklist(typeof(FisherAnimationSkipper), animations);
+            getResourceSyncHook?.Disable();
+            getResourceAsyncHook?.Disable();
         }
+    }
+
+    private ResourceHandle* GetResourceSyncDetour(
+        ResourceManager* manager, ResourceCategory* category, uint* type, uint* hash,
+        CStringPointer path, void* unknown, void* unkDebugPtr, uint unkDebugInt)
+    {
+        if (!ShouldRedirectResource(category, path))
+            return getResourceSyncHook!.Original(manager, category, type, hash, path, unknown, unkDebugPtr, unkDebugInt);
+
+        var redirectedHash = NothingHash;
+        fixed (byte* redirectedPath = "vfx/path/nothing.avfx"u8)
+            return getResourceSyncHook!.Original(manager, category, type, &redirectedHash, redirectedPath, unknown, unkDebugPtr, unkDebugInt);
+    }
+
+    private ResourceHandle* GetResourceAsyncDetour(
+        ResourceManager* manager, ResourceCategory* category, uint* type, uint* hash,
+        CStringPointer path, void* unknown, bool isUnknown, void* unkDebugPtr, uint unkDebugInt)
+    {
+        if (isUnknown || !ShouldRedirectResource(category, path))
+            return getResourceAsyncHook!.Original(manager, category, type, hash, path, unknown, isUnknown, unkDebugPtr, unkDebugInt);
+
+        var redirectedHash = NothingHash;
+        fixed (byte* redirectedPath = "vfx/path/nothing.avfx"u8)
+            return getResourceAsyncHook!.Original(manager, category, type, &redirectedHash, redirectedPath, unknown, isUnknown, unkDebugPtr, unkDebugInt);
+    }
+
+    private bool ShouldRedirectResource(ResourceCategory* category, CStringPointer path)
+    {
+        if (category == null || *category != ResourceCategory.Chara || !path.HasValue)
+            return false;
+
+        if (((byte*)path)[0] is not ((byte)'c' or (byte)'C'))
+            return false;
+
+        var blacklist = animationBlacklist;
+        return blacklist is { Count: > 0 } && blacklist.Contains(path.ToString().Trim());
     }
 
     private HashSet<string> GetOrResolveAnimations()
@@ -157,6 +208,13 @@ public class FisherAnimationSkipper : ModuleBase
         key.EndsWith("/idle", StringComparison.OrdinalIgnoreCase) ||
         key.EndsWith("retrieve_idle", StringComparison.OrdinalIgnoreCase) ||
         key.EndsWith("reeling_idle", StringComparison.OrdinalIgnoreCase);
+
+    #endregion
+
+    #region 常量
+
+    private const uint FisherJobID = 18;
+    private const uint NothingHash = 0x61565D6Cu;
 
     #endregion
 }

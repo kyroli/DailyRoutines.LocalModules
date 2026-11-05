@@ -40,7 +40,7 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class AutoQuestSay : ModuleBase
 {
-    public override ModuleInfo Info => new()
+    public override ModuleInfo Info { get; } = new()
     {
         Title       = IClientState.Instance().ClientLanguage == ClientLanguage.ChineseSimplified ? "自动任务说话" : "Auto Quest Say",
         Description = IClientState.Instance().ClientLanguage == ClientLanguage.ChineseSimplified ? "当任务目标要求在当前频道说出指定台词时，点击目标将自动在当前频道发送台词。" : "Automatically sends the required chat line when clicking on quest targets that require saying specific lines.",
@@ -49,16 +49,7 @@ public unsafe class AutoQuestSay : ModuleBase
         ReportURL   = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
     };
 
-    public delegate ulong InteractWithObjectDelegate(TargetSystem* system, GameObject* obj, bool checkLOS);
-
-    private static readonly Regex ChineseRegex = new(@"(?:“|\x22|「)([^“”\x22「」]+?)(?:”|\x22|」)", RegexOptions.Compiled);
-    private static readonly Regex JapaneseRegex = new(@"(?:「)([^「」]+?)(?:」)", RegexOptions.Compiled);
-    private static readonly Regex EnglishRegex = new(@"(?:\x22|“)([^\x22“”]+?)(?:\x22|”)", RegexOptions.Compiled);
-    private static readonly Regex GermanRegex = new(@"(?:„|»)([^„“»«]+?)(?:“|«)", RegexOptions.Compiled);
-    private static readonly Regex FrenchRegex = new(@"(?:«\s*|“)([^«»“”]+?)(?:\s*»|”)", RegexOptions.Compiled);
-    private static readonly Regex SayKeyRegex = new(@"_(SAY|SAYTODO|SYSTEM)_", RegexOptions.Compiled);
-
-    private Hook<InteractWithObjectDelegate>? InteractWithObjectHook;
+    private Hook<TargetSystem.Delegates.InteractWithObject>? InteractWithObjectHook;
     private readonly Dictionary<string, ExcelSheet<QuestDialogue>> DialogueSheets = [];
     private ChatManager? Chat;
     private Regex? CurrentSayRegex;
@@ -79,21 +70,16 @@ public unsafe class AutoQuestSay : ModuleBase
             _                       => ChineseRegex
         };
 
-        InteractWithObjectHook ??= IGameInteropProvider.Instance().HookFromMemberFunction<InteractWithObjectDelegate>(
-            typeof(TargetSystem.MemberFunctionPointers), "InteractWithObject", InteractWithObjectDetour);
-        
+        InteractWithObjectHook ??= IGameInteropProvider.Instance().HookFromMemberFunction(
+            typeof(TargetSystem.MemberFunctionPointers),
+            "InteractWithObject",
+            (TargetSystem.Delegates.InteractWithObject)InteractWithObjectDetour);
+
         InteractWithObjectHook.Enable();
     }
 
     protected override void Uninit()
     {
-        if (InteractWithObjectHook != null)
-        {
-            InteractWithObjectHook.Disable();
-            InteractWithObjectHook.Dispose();
-            InteractWithObjectHook = null;
-        }
-
         DialogueSheets.Clear();
         LastMountedTime = 0;
     }
@@ -140,8 +126,7 @@ public unsafe class AutoQuestSay : ModuleBase
         if (questID == 0)
             return false;
 
-        var questManager = QuestManager.Instance();
-        return questManager != null && questManager->IsQuestAccepted(questID);
+        return QuestManager.Instance()->IsQuestAccepted(questID);
     }
 
     private static ushort GetQuestIDFromObject(GameObject* obj)
@@ -170,19 +155,16 @@ public unsafe class AutoQuestSay : ModuleBase
             if (!TryGetDialogueSheet(questID, out var dialogueSheet))
                 return string.Empty;
 
-            // 遍历对话表中的候选台词节点，结合任务指引文本进行交叉匹配
             foreach (var qd in dialogueSheet!)
             {
                 if (qd.Value.IsEmpty) continue;
                 var keyStr = qd.Key.ToString();
 
-                // 筛选包含 _SAY_ / _SAYTODO_ / _SYSTEM_ 的候选台词节点
                 if (!SayKeyRegex.IsMatch(keyStr)) continue;
 
                 var candidateMessage = qd.Value.ToDalamudString().TextValue.Trim();
                 if (string.IsNullOrEmpty(candidateMessage)) continue;
 
-                // 验证该候选台词是否被包含在该 QuestDialogue 对话表的目标指引（TODO/SEQ）中
                 if (IsMessageMatchedByGuidance(dialogueSheet, candidateMessage))
                     return candidateMessage;
             }
@@ -204,13 +186,11 @@ public unsafe class AutoQuestSay : ModuleBase
             if (entry.Value.IsEmpty) continue;
             var keyStr = entry.Key.ToString();
 
-            // 忽略台词节点本身，只比对指引与描述节点（如 TODO / SEQ）
             if (SayKeyRegex.IsMatch(keyStr)) continue;
 
             var guidanceText = entry.Value.ToDalamudString().TextValue;
             var matches = CurrentSayRegex.Matches(guidanceText);
 
-            // 匹配指引文本中引号包裹的内容，检查是否包含候选台词
             if (matches.Any(m => m.Value.Contains(candidateMessage)))
                 return true;
         }
@@ -238,6 +218,17 @@ public unsafe class AutoQuestSay : ModuleBase
 
         return dialogueSheet != null;
     }
+
+    #endregion
+
+    #region 常量
+
+    private static readonly Regex ChineseRegex  = new(@"(?:“|\x22|「)([^“”\x22「」]+?)(?:”|\x22|」)", RegexOptions.Compiled);
+    private static readonly Regex JapaneseRegex = new(@"(?:「)([^「」]+?)(?:」)", RegexOptions.Compiled);
+    private static readonly Regex EnglishRegex  = new(@"(?:\x22|“)([^\x22“”]+?)(?:\x22|”)", RegexOptions.Compiled);
+    private static readonly Regex GermanRegex   = new(@"(?:„|»)([^„“»«]+?)(?:“|«)", RegexOptions.Compiled);
+    private static readonly Regex FrenchRegex   = new(@"(?:«\s*|“)([^«»“”]+?)(?:\s*»|”)", RegexOptions.Compiled);
+    private static readonly Regex SayKeyRegex   = new(@"_(SAY|SAYTODO|SYSTEM)_", RegexOptions.Compiled);
 
     #endregion
 }

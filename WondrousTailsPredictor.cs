@@ -25,7 +25,7 @@ namespace DailyRoutines.ModulesPublic;
 
 public unsafe class WondrousTailsPredictor : ModuleBase
 {
-    public override ModuleInfo Info => new()
+    public override ModuleInfo Info { get; } = new()
     {
         Title       = IClientState.Instance().ClientLanguage == ClientLanguage.ChineseSimplified ? "天书连线概率" : "Wondrous Tails Predictor",
         Description = IClientState.Instance().ClientLanguage == ClientLanguage.ChineseSimplified ? "在天书界面实时计算并显示连线概率，辅助洗牌决策。" : "Calculates and displays line probabilities in Wondrous Tails, assisting with shuffle decisions.",
@@ -34,11 +34,8 @@ public unsafe class WondrousTailsPredictor : ModuleBase
         ReportURL   = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
     };
 
-    private static readonly byte[] LineTable = new byte[65536];
-    private static readonly int[] TotalPaths = [11440, 6435, 3432, 1716, 792, 330, 120, 36, 8, 1];
-
-    private static string[] BaseTitles = [];
-    private ushort PrevMask = 0xFFFF;
+    private string[] baseTitles = [];
+    private ushort   prevMask   = 0xFFFF;
 
     static WondrousTailsPredictor()
     {
@@ -58,13 +55,13 @@ public unsafe class WondrousTailsPredictor : ModuleBase
         al.RegisterListener(AddonEvent.PostRefresh, "WeeklyBingo", OnAddonEvent);
         al.RegisterListener(AddonEvent.PreFinalize, "WeeklyBingo", OnAddonEvent);
 
-        BaseTitles = [
+        baseTitles = [
             LuminaWrapper.GetAddonText(5611),
             LuminaWrapper.GetAddonText(5612),
             LuminaWrapper.GetAddonText(5613)
         ];
 
-        PrevMask = 0xFFFF;
+        prevMask = 0xFFFF;
         var addon = (AddonWeeklyBingo*)Addons.WeeklyBingo;
         if (addon != null && addon->RootNode != null)
             UpdateProbabilities(addon);
@@ -79,7 +76,7 @@ public unsafe class WondrousTailsPredictor : ModuleBase
     private void OnAddonEvent(AddonEvent type, AddonArgs args)
     {
         if (type == AddonEvent.PreFinalize)
-            PrevMask = 0xFFFF;
+            prevMask = 0xFFFF;
         else
             UpdateProbabilities((AddonWeeklyBingo*)args.Addon.Address);
     }
@@ -111,28 +108,28 @@ public unsafe class WondrousTailsPredictor : ModuleBase
             }
         }
 
-        if (currentMask == PrevMask) return;
-        PrevMask = currentMask;
+        if (currentMask == prevMask) return;
+        prevMask = currentMask;
 
         var prob = CalculateExactProbabilities(currentMask, stickers);
-        lineOneNode->SetText(BuildLineText(BaseTitles[0], prob.Line1, 0.70));
-        lineTwoNode->SetText(BuildLineText(BaseTitles[1], prob.Line2, 0.20));
-        lineThreeNode->SetText(BuildLineText(BaseTitles[2], prob.Line3, 0.05));
+        lineOneNode->SetText(BuildLineText(baseTitles[0], prob.Line1, 0.70));
+        lineTwoNode->SetText(BuildLineText(baseTitles[1], prob.Line2, 0.20));
+        lineThreeNode->SetText(BuildLineText(baseTitles[2], prob.Line3, 0.05));
     }
 
-    private static void RestoreAddon()
+    private void RestoreAddon()
     {
         var addon = (AddonWeeklyBingo*)Addons.WeeklyBingo;
         if (addon == null || addon->RootNode == null) return;
 
         var node1 = addon->GetTextNodeById(78);
-        if (node1 != null) node1->SetText(BaseTitles[0]);
+        if (node1 != null) node1->SetText(baseTitles[0]);
 
         var node2 = addon->GetTextNodeById(89);
-        if (node2 != null) node2->SetText(BaseTitles[1]);
+        if (node2 != null) node2->SetText(baseTitles[1]);
 
         var node3 = addon->GetTextNodeById(100);
-        if (node3 != null) node3->SetText(BaseTitles[2]);
+        if (node3 != null) node3->SetText(baseTitles[2]);
     }
 
     private static byte[] BuildLineText(string title, double val, double highThreshold)
@@ -197,4 +194,11 @@ public unsafe class WondrousTailsPredictor : ModuleBase
                 Enumerate(i + 1, need - 1, (ushort)(board | (1 << ctx.EmptySlots[i])), ref ctx);
         }
     }
+
+    #region 常量
+
+    private static readonly byte[] LineTable  = new byte[65536];
+    private static readonly int[]  TotalPaths = [11440, 6435, 3432, 1716, 792, 330, 120, 36, 8, 1];
+
+    #endregion
 }
