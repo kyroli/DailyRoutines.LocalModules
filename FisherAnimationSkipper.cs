@@ -32,6 +32,8 @@ public unsafe class FisherAnimationSkipper : ModuleBase
         ReportURL   = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
     };
 
+    public override string ModuleName => nameof(FisherAnimationSkipper);
+
     #region State
 
     private bool isSkipperEnabled;

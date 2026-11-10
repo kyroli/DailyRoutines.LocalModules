@@ -34,6 +34,8 @@ public unsafe class WondrousTailsPredictor : ModuleBase
         ReportURL   = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
     };
 
+    public override string ModuleName => nameof(WondrousTailsPredictor);
+
     private string[] baseTitles = [];
     private ushort   prevMask   = 0xFFFF;
 

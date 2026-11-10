@@ -76,6 +76,8 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
         ModulesPrerequisite = ["AutoTalkSkip", "AutoRefreshMarketSearchResult", "BetterMarketBoard"]
     };
 
+    public override string ModuleName => nameof(AutoRetainerWorkCustom);
+
     [IPCSubscriber("DailyRoutines.Modules.BetterMarketBoard.SearchItem")]
     private static IPCSubscriber<uint, bool>? SearchItemIPC = null;
 

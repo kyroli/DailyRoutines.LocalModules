@@ -41,6 +41,8 @@ public unsafe class GoldSaucerGATEsHelper : ModuleBase
         ReportURL = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
     };
 
+    public override string ModuleName => nameof(GoldSaucerGATEsHelper);
+
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate nint FireCachedTargetDelegate(nint context);
 

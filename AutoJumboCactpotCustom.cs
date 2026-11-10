@@ -34,6 +34,8 @@ public class AutoJumboCactpotCustom : ModuleBase
         ReportURL   = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
     };
 
+    public override string ModuleName => nameof(AutoJumboCactpotCustom);
+
     private record struct LocStrings(string SelectionMode, string ModeRandom, string ModeFixed, string ModeSync, string InputNumber, string SyncHint);
     private LocStrings Loc;
 

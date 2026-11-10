@@ -46,6 +46,8 @@ public unsafe class AutoTripleTriad : ModuleBase
         ReportURL = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
     };
 
+    public override string ModuleName => nameof(AutoTripleTriad);
+
     private Config config = null!;
     private int matchCount = 0;
     private bool isInMatch = false;
