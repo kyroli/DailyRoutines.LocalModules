@@ -2108,7 +2108,8 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
 
             public override IReadOnlyList<ContextMenuItem>? CreateMultiple(ContextMenuOpenedArgs args)
             {
-                if (args.AddonName != "RetainerSellList")
+                if (args.Addon is null ||
+                    args.Addon->NameString != "RetainerSellList")
                     return null;
 
                 var agent = AgentRetainer.Instance();

@@ -8,11 +8,13 @@ using Dalamud.Bindings.ImGui;
 using Dalamud.Game;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using DailyRoutines.Common.Info.Models;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -20,6 +22,7 @@ using DailyRoutines.Extensions;
 using OmenTools;
 using OmenTools.Dalamud;
 using OmenTools.Extensions;
+using OmenTools.Info.Game.Data;
 using Lumina.Excel.Sheets;
 using static OmenTools.Global.Globals;
 
@@ -41,9 +44,18 @@ public unsafe class AutoTripleTriad : ModuleBase
     {
         Title = IClientState.Instance().ClientLanguage == ClientLanguage.ChineseSimplified ? "九宫幻卡自动化" : "Auto Triple Triad",
         Description = IClientState.Instance().ClientLanguage == ClientLanguage.ChineseSimplified ? "自动与 NPC 进行九宫幻卡连续对战。\n支持直到集齐未拥有卡牌后停止、完成指定次数后停止，以及自动读取胜率最高的卡组。\n※ 本模块仅作交互辅助，【必须】配合并加载外部插件 TriadBuddy 才能正常工作。" : "Auto play Triple Triad matches continuously.\nSupports stopping after collecting all cards, reaching target count, and auto recommended deck.\n※ This is only an interaction helper. MUST load external plugin TriadBuddy to work.",
-        Category = ModuleCategory.GoldSaucer,
-        Author = ["nynpsu"],
-        ReportURL = "https://github.com/kyroli/DailyRoutines.LocalModules/issues"
+        Category            = ModuleCategory.GoldSaucer,
+        Author              = ["nynpsu"],
+        ReportURL           = "https://github.com/kyroli/DailyRoutines.LocalModules/issues",
+        PluginsPrerequisite =
+        [
+            new(
+                "TriadBuddy",
+                () => IDalamudPluginInterface.Instance().IsPluginEnabled("TriadBuddy") ||
+                      AppDomain.CurrentDomain.GetAssemblies().Any(a => a.GetName().Name == "TriadBuddy"),
+                "TriadBuddy"
+            )
+        ]
     };
 
     public override string ModuleName => nameof(AutoTripleTriad);
@@ -312,10 +324,10 @@ public unsafe class AutoTripleTriad : ModuleBase
     {
         if (!isTriadUIActive && !wasAnyTriadUIOpen) return;
 
-        var prepAddon = (AtkUnitBase*)IGameGui.Instance().GetAddonByName("TripleTriadRequest").Address;
-        var selDeckAddon = (AtkUnitBase*)IGameGui.Instance().GetAddonByName("TripleTriadSelDeck").Address;
-        var gameAddon = (AtkUnitBase*)IGameGui.Instance().GetAddonByName("TripleTriad").Address;
-        var resultAddon = (AtkUnitBase*)IGameGui.Instance().GetAddonByName("TripleTriadResult").Address;
+        var prepAddon    = Addons.TripleTriadRequest;
+        var selDeckAddon = Addons.TripleTriadSelDeck;
+        var gameAddon    = Addons.TripleTriad;
+        var resultAddon  = Addons.TripleTriadResult;
 
         bool isPrepOpen = prepAddon != null && prepAddon->IsVisible;
         bool isSelDeckOpen = selDeckAddon != null && selDeckAddon->IsVisible;
@@ -421,10 +433,10 @@ public unsafe class AutoTripleTriad : ModuleBase
 
     private bool CheckAnyTriadUIOpen()
     {
-        var prepAddon = (AtkUnitBase*)IGameGui.Instance().GetAddonByName("TripleTriadRequest").Address;
-        var selDeckAddon = (AtkUnitBase*)IGameGui.Instance().GetAddonByName("TripleTriadSelDeck").Address;
-        var gameAddon = (AtkUnitBase*)IGameGui.Instance().GetAddonByName("TripleTriad").Address;
-        var resultAddon = (AtkUnitBase*)IGameGui.Instance().GetAddonByName("TripleTriadResult").Address;
+        var prepAddon    = Addons.TripleTriadRequest;
+        var selDeckAddon = Addons.TripleTriadSelDeck;
+        var gameAddon    = Addons.TripleTriad;
+        var resultAddon  = Addons.TripleTriadResult;
 
         return (prepAddon != null && prepAddon->IsVisible) ||
                (selDeckAddon != null && selDeckAddon->IsVisible) ||
@@ -434,7 +446,7 @@ public unsafe class AutoTripleTriad : ModuleBase
 
     private unsafe void ProcessSelectString()
     {
-        var addon = (AtkUnitBase*)IGameGui.Instance().GetAddonByName("SelectString").Address;
+        var addon = Addons.SelectString;
         if (addon != null && addon->IsVisible && addon->UldManager.NodeListCount > 0)
         {
             if (Environment.TickCount64 - lastSelectStringTime < 1000) return;
@@ -461,7 +473,7 @@ public unsafe class AutoTripleTriad : ModuleBase
 
     private unsafe void ProcessTripleTriadResult()
     {
-        var addonResult = (AtkUnitBase*)IGameGui.Instance().GetAddonByName("TripleTriadResult").Address;
+        var addonResult = Addons.TripleTriadResult;
         if (addonResult != null && addonResult->IsVisible)
         {
             if (!isResultShown)
@@ -637,7 +649,7 @@ public unsafe class AutoTripleTriad : ModuleBase
 
     private unsafe void UpdateGameState()
     {
-        var addonGame = (AtkUnitBase*)IGameGui.Instance().GetAddonByName("TripleTriad").Address;
+        var addonGame = Addons.TripleTriad;
         if (addonGame != null && addonGame->IsVisible)
         {
             isInMatch = true;
@@ -674,7 +686,7 @@ public unsafe class AutoTripleTriad : ModuleBase
                 return;
             }
 
-            var addon = (AddonTripleTriad*)IGameGui.Instance().GetAddonByName("TripleTriad").Address;
+            var addon = (AddonTripleTriad*)Addons.TripleTriad;
             if (addon == null) return;
 
             // 仅在我方可落子时出牌, 避开 Waiting 与对手回合
@@ -715,7 +727,7 @@ public unsafe class AutoTripleTriad : ModuleBase
 
     private unsafe void ProcessRequest()
     {
-        var addon = (AtkUnitBase*)IGameGui.Instance().GetAddonByName("TripleTriadRequest").Address;
+        var addon = Addons.TripleTriadRequest;
         if (addon != null && addon->IsVisible)
         {
             if (Environment.TickCount64 - lastRequestTime < 1000) return;
@@ -727,7 +739,7 @@ public unsafe class AutoTripleTriad : ModuleBase
 
     private unsafe void ProcessSelDeck()
     {
-        var addon = (AtkUnitBase*)IGameGui.Instance().GetAddonByName("TripleTriadSelDeck").Address;
+        var addon = Addons.TripleTriadSelDeck;
         if (addon != null && addon->IsVisible)
         {
             if (Environment.TickCount64 - lastSelDeckTime < 1000) return;
