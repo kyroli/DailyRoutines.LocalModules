@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Globalization;
 using System.Linq;
 using System.Numerics;
 using System.Text;
@@ -1075,10 +1076,6 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                                            .GetWrapOrDefault();
             if (itemLogo == null) return;
 
-            var itemBuyingPrice = selectedItemConfig.ItemID == 0 ?
-                                      1 :
-                                      item.PriceLow;
-
             if (!child) return;
 
             ImGui.Image(itemLogo.Handle, ScaledVector2(48f));
@@ -1163,7 +1160,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
             {
                 if (ImGuiOm.ButtonIcon("ObtainBuyingPrice", FontAwesomeIcon.Store, GetLoc("AutoRetainerWork-PriceAdjust-ObtainBuyingPrice")))
                 {
-                    selectedItemConfig.PriceMinimum = Math.Max(1, (int)itemBuyingPrice);
+                    selectedItemConfig.PriceMinimum = Math.Max(1, (int)GetVendorPrice(item, selectedItemConfig.IsHQ));
                     Module.SaveConfig(Module.config);
                 }
             }
@@ -1747,7 +1744,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                     itemConfig,
                     itemMarketData.Value.Price,
                     modifiedPrice,
-                    finalMarketPrice,
+                    itemMarketData.Value.VendorPrice,
                     out var abortCondition,
                     out var abortBehavior
                 ))
@@ -1911,7 +1908,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
             return true;
         }
 
-        private static (ItemKey Item, uint Price)? GetRetainerMarketItem(ushort slot)
+        private static RetainerMarketItem? GetRetainerMarketItem(ushort slot)
         {
             if (slot >= 20) return null;
 
@@ -1925,7 +1922,10 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
             if (slotData == null) return null;
 
             var item = new ItemKey(slotData->ItemId, slotData->Flags.HasFlag(InventoryItem.ItemFlags.HighQuality));
-            return (item, GetRetainerMarketPrice(slot));
+            var vendorPrice = LuminaGetter.TryGetRow<Item>(item.ItemID, out var itemRow) ?
+                                  GetVendorPrice(itemRow, item.IsHQ, slotData->GetMateriaCount()) :
+                                  0;
+            return new(item, GetRetainerMarketPrice(slot), vendorPrice);
         }
 
         private static uint GetRetainerMarketPrice(ushort slot)
@@ -1961,7 +1961,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
             ItemConfig         config,
             uint               origPrice,
             uint               modifiedPrice,
-            uint               marketPrice,
+            uint               vendorPrice,
             out AbortCondition conditionMet,
             out AbortBehavior  behaviorNeeded)
         {
@@ -1981,13 +1981,28 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                     break;
                 }
 
-                if (!hasBehavior || !condition.Predicate(config, origPrice, modifiedPrice, marketPrice)) continue;
+                if (!hasBehavior || !condition.Predicate(config, origPrice, modifiedPrice, vendorPrice)) continue;
 
                 conditionMet = condition.Condition;
                 return true;
             }
 
             return false;
+        }
+
+        private static uint GetVendorPrice(
+            Item item,
+            bool isHQ,
+            byte materiaCount = 0)
+        {
+            var price = item.PriceLow;
+            if (isHQ)
+                price = ((price * 11) + 9) / 10;
+
+            if (materiaCount > 0)
+                price = ((price * (uint)(materiaCount + 10)) + 9) / 10;
+
+            return price;
         }
 
         private static uint GetModifiedPrice(ItemConfig config, uint marketPrice)
@@ -2020,7 +2035,7 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
                 priceChangeText = $"+{priceChangeText}";
 
             var priceChangeRate = origPrice == 0 ? 0 : (double)priceChangedValue / origPrice * 100;
-            var priceChangeRateText = priceChangeRate.ToString("+0.##;-0.##") + "%";
+            var priceChangeRateText = priceChangeRate.ToString("+0.##;-0.##", CultureInfo.CurrentCulture) + "%";
 
             var retainer = RetainerManager.Instance()->GetActiveRetainer();
             var retainerName = retainer != null ? retainer->NameString : string.Empty;
@@ -3172,6 +3187,11 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
         改价至最高值
     }
 
+    private readonly record struct RetainerMarketItem(
+        ItemKey Item,
+        uint    Price,
+        uint    VendorPrice);
+
     private class PriceCheckCondition(
         AbortCondition                           condition,
         Func<ItemConfig, uint, uint, uint, bool> predicate)
@@ -3204,9 +3224,8 @@ public unsafe partial class AutoRetainerWorkCustom : ModuleBase
             ),
             new(
                 AbortCondition.低于收购价,
-                (cfg, _, modified, _) =>
-                    LuminaGetter.TryGetRow<Item>(cfg.ItemID, out var itemRow) &&
-                    modified <= itemRow.PriceMid
+                (_, _, modified, vendorPrice) =>
+                    modified <= vendorPrice
             ),
             new(
                 AbortCondition.低于最小值,
